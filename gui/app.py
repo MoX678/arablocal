@@ -48,8 +48,9 @@ def main():
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
 
     app = QApplication(sys.argv)
+    from core import __version__
     app.setApplicationName("ArabLocal Scraper")
-    app.setApplicationVersion("3.0")
+    app.setApplicationVersion(__version__)
 
     # Apply dark theme
     from gui.theme import STYLESHEET
@@ -61,7 +62,7 @@ def main():
     # Catch unhandled exceptions so the app doesn't silently crash
     def _exception_hook(exc_type, exc_value, exc_tb):
         import traceback
-        traceback.print_exception(exc_type, exc_value, exc_tb)
+        _logger.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
         sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _exception_hook
@@ -78,4 +79,3 @@ if __name__ == "__main__":
     except Exception as e:
         import traceback
         traceback.print_exc()
-        input("Press Enter to exit...")

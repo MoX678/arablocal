@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addStretch()
 
         # Version label at bottom
-        version_label = QLabel("v3.0")
+        version_label = QLabel(f"v{__version__}")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet(
             "color: #35353b; font-size: 10px; "
