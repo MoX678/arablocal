@@ -15,6 +15,10 @@ if getattr(sys, "frozen", False):
     # Also add the EXE's directory for output/config files
     _APP_DIR = os.path.dirname(sys.executable)
     os.chdir(_APP_DIR)
+    # Tell patchright/playwright to use the system browser cache
+    # (bundled exe defaults to .local-browsers which is empty)
+    _pw_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", _pw_dir)
 else:
     _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -35,6 +39,19 @@ def main():
     _logger.addHandler(logging.NullHandler())
     _logger.propagate = False
     _logger.setLevel(logging.DEBUG)
+
+    # ── Error / crash log folder ─────────────────────────────────────────
+    _errors_dir = os.path.join(os.getcwd(), "errors")
+    os.makedirs(_errors_dir, exist_ok=True)
+
+    _err_handler = logging.FileHandler(
+        os.path.join(_errors_dir, "error.log"), encoding="utf-8"
+    )
+    _err_handler.setLevel(logging.ERROR)
+    _err_handler.setFormatter(logging.Formatter(
+        "%(asctime)s  %(levelname)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    ))
+    _logger.addHandler(_err_handler)
 
     # Also silence scrapling's internal logger (prints "Fetched (200)..." to terminal)
     logging.getLogger("scrapling").setLevel(logging.CRITICAL)
@@ -62,7 +79,20 @@ def main():
     # Catch unhandled exceptions so the app doesn't silently crash
     def _exception_hook(exc_type, exc_value, exc_tb):
         import traceback
-        _logger.error("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+        from datetime import datetime
+        tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        _logger.error(tb_str)
+        # Write individual crash file
+        try:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            crash_path = os.path.join(_errors_dir, f"crash_{ts}.log")
+            with open(crash_path, "w", encoding="utf-8") as f:
+                f.write(f"ArabLocal Scraper — Unhandled Exception\n")
+                f.write(f"Time: {datetime.now().isoformat()}\n")
+                f.write(f"{'=' * 60}\n\n")
+                f.write(tb_str)
+        except Exception:
+            pass
         sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _exception_hook

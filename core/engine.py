@@ -107,7 +107,10 @@ class ArabLocalEngine:
     # ─── Session lifecycle ───────────────────────────────────────────────
 
     async def _ensure_session(self):
-        """Lazily start the stealth browser session (one browser, page pool)."""
+        """Lazily start the stealth browser session (one browser, page pool).
+
+        If the browser executable is missing, attempts a one-time auto-install.
+        """
         if self._session is None:
             # Silence scrapling's internal "Fetched (200)" logs
             _scrapling_log = logging.getLogger("scrapling")
@@ -133,7 +136,28 @@ class ArabLocalEngine:
                 session_kwargs["dns_over_https"] = True
                 log.info(f"[session] ProxyRotator enabled with {len(self.proxy_pool)} proxies")
             self._session = AsyncStealthySession(**session_kwargs)
-            await self._session.start()
+
+            try:
+                await self._session.start()
+            except Exception as exc:
+                self._session = None
+                err_msg = str(exc)
+                if "Executable doesn't exist" in err_msg or "browsertype.launch" in err_msg.lower():
+                    log.warning("[session] Browser not found — attempting auto-install...")
+                    from gui.bootstrap import _install_browser_cli
+                    ok = _install_browser_cli()
+                    if ok:
+                        log.info("[session] Browser installed — retrying session start...")
+                        self._session = AsyncStealthySession(**session_kwargs)
+                        await self._session.start()
+                    else:
+                        raise RuntimeError(
+                            "Chromium browser not found and auto-install failed. "
+                            "Run: python -m patchright install chromium"
+                        ) from exc
+                else:
+                    raise
+
             log.info("[session] Stealth browser session started (page pool)")
 
     async def _close_session(self):

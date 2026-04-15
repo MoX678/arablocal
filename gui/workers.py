@@ -291,9 +291,23 @@ class ScrapeWorker(QThread):
             loop.run_until_complete(self._run_all())
         except Exception as e:
             import traceback
+            from datetime import datetime
             tb = traceback.format_exc()
             log.error(f"Pipeline crashed:\n{tb}")
             self.log_message.emit("ALL", "ERROR", f"Pipeline crashed: {e}")
+            # Write crash file
+            try:
+                errors_dir = os.path.join(os.getcwd(), "errors")
+                os.makedirs(errors_dir, exist_ok=True)
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                crash_path = os.path.join(errors_dir, f"crash_all_{ts}.log")
+                with open(crash_path, "w", encoding="utf-8") as f:
+                    f.write(f"ArabLocal Scraper — Global Pipeline Crash\n")
+                    f.write(f"Time: {datetime.now().isoformat()}\n")
+                    f.write(f"{'=' * 60}\n\n")
+                    f.write(tb)
+            except Exception:
+                pass
         finally:
             loop.close()
             self.pipeline_finished.emit()
@@ -401,10 +415,25 @@ class ScrapeWorker(QThread):
 
         except Exception as e:
             import traceback
+            from datetime import datetime
             tb = traceback.format_exc()
             log.error(f"Pipeline crash [{key}]:\n{tb}")
             self.job_error.emit(key, str(e))
             self.log_message.emit(key, "ERROR", str(e))
+            # Write crash file to errors/ folder
+            try:
+                errors_dir = os.path.join(os.getcwd(), "errors")
+                os.makedirs(errors_dir, exist_ok=True)
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                crash_path = os.path.join(errors_dir, f"crash_{key}_{ts}.log")
+                with open(crash_path, "w", encoding="utf-8") as f:
+                    f.write(f"ArabLocal Scraper — Pipeline Error [{key.upper()}]\n")
+                    f.write(f"Time: {datetime.now().isoformat()}\n")
+                    f.write(f"Country: {key.upper()}\n")
+                    f.write(f"{'=' * 60}\n\n")
+                    f.write(tb)
+            except Exception:
+                pass
         finally:
             self._engines.pop(key, None)
             await engine._close_session()

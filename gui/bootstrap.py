@@ -23,30 +23,77 @@ def _is_frozen() -> bool:
     return getattr(sys, "frozen", False)
 
 
-def _browser_installed() -> bool:
-    """Check if patchright chromium browser is installed."""
-    pw_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
-    if not os.path.isdir(pw_dir):
+def _patchright_local_browsers_dir() -> str | None:
+    """Resolve patchright's .local-browsers dir (used by bundled exe)."""
+    try:
+        from patchright._impl._driver import compute_driver_executable
+        _node_exe, cli_js = compute_driver_executable()
+        # cli_js is  …/patchright/driver/package/cli.js
+        package_dir = os.path.dirname(str(cli_js))
+        local_dir = os.path.join(package_dir, ".local-browsers")
+        return local_dir
+    except Exception:
+        return None
+
+
+def _has_chromium_in(directory: str) -> bool:
+    """Check if a chromium-* subdirectory exists in *directory*."""
+    if not directory or not os.path.isdir(directory):
         return False
-    # Look for any chromium-* directory
-    for name in os.listdir(pw_dir):
-        if name.startswith("chromium-") and os.path.isdir(os.path.join(pw_dir, name)):
+    for name in os.listdir(directory):
+        if name.startswith("chromium-") and os.path.isdir(os.path.join(directory, name)):
             return True
     return False
 
 
+def _browser_installed() -> bool:
+    """Check if patchright chromium browser is installed.
+
+    Checks two locations:
+      1. System-wide: %LOCALAPPDATA%/ms-playwright  (dev installs)
+      2. Patchright-local: <driver>/package/.local-browsers  (bundled exe)
+    """
+    # System-wide ms-playwright
+    pw_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
+    if _has_chromium_in(pw_dir):
+        return True
+
+    # Patchright .local-browsers (bundled exe)
+    local_dir = _patchright_local_browsers_dir()
+    if _has_chromium_in(local_dir):
+        return True
+
+    return False
+
+
 def _install_browser_cli() -> bool:
-    """Install patchright chromium browser via CLI."""
+    """Install patchright chromium browser via CLI.
+
+    Uses PLAYWRIGHT_BROWSERS_PATH from env (set by app.py for frozen exe)
+    to install to the correct location.
+    """
     try:
         from patchright._impl._driver import compute_driver_executable, get_driver_env
         node_exe, cli_js = compute_driver_executable()
         env = get_driver_env()
+
+        # Inherit the app-level PLAYWRIGHT_BROWSERS_PATH if set
+        pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+        if pw_path:
+            env["PLAYWRIGHT_BROWSERS_PATH"] = pw_path
+
+        # On Windows, suppress console window flash
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = subprocess.CREATE_NO_WINDOW
+
         result = subprocess.run(
             [str(node_exe), str(cli_js), "install", "chromium"],
             env=env,
             capture_output=True,
             text=True,
             timeout=300,
+            creationflags=creationflags,
         )
         return result.returncode == 0
     except Exception as e:
