@@ -100,6 +100,9 @@ def main():
     window = MainWindow()
     window.show()
 
+    # Start background update check
+    window.start_update_check()
+
     sys.exit(app.exec())
 
 

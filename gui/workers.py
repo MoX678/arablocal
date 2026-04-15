@@ -437,3 +437,43 @@ class ScrapeWorker(QThread):
         finally:
             self._engines.pop(key, None)
             await engine._close_session()
+
+
+# ─── Update workers ─────────────────────────────────────────────────────────
+
+class UpdateCheckWorker(QThread):
+    """Background thread to check GitHub for a newer release."""
+
+    update_available = pyqtSignal(dict)  # update info dict
+    no_update = pyqtSignal()
+
+    def __init__(self, current_version: str, parent=None):
+        super().__init__(parent)
+        self._version = current_version
+
+    def run(self):
+        from core.updater import check_for_update
+        info = check_for_update(self._version)
+        if info:
+            self.update_available.emit(info)
+        else:
+            self.no_update.emit()
+
+
+class UpdateDownloadWorker(QThread):
+    """Download the update zip with progress."""
+
+    progress = pyqtSignal(int, int)   # bytes_downloaded, total_bytes
+    finished = pyqtSignal(str)        # zip_path (empty string on failure)
+
+    def __init__(self, download_url: str, parent=None):
+        super().__init__(parent)
+        self._url = download_url
+
+    def run(self):
+        from core.updater import download_update
+        path = download_update(self._url, progress_callback=self._on_progress)
+        self.finished.emit(path or "")
+
+    def _on_progress(self, downloaded: int, total: int):
+        self.progress.emit(downloaded, total)
