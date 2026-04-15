@@ -292,7 +292,7 @@ class ScrapeWorker(QThread):
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            print(f"[CRASH] Pipeline crashed: {tb}", flush=True)
+            log.error(f"Pipeline crashed:\n{tb}")
             self.log_message.emit("ALL", "ERROR", f"Pipeline crashed: {e}")
         finally:
             loop.close()
@@ -402,7 +402,7 @@ class ScrapeWorker(QThread):
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            print(f"[CRASH] {key}: {tb}", flush=True)
+            log.error(f"Pipeline crash [{key}]:\n{tb}")
             self.job_error.emit(key, str(e))
             self.log_message.emit(key, "ERROR", str(e))
         finally:

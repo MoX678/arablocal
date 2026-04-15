@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Set
 
 from core.config import BASE_FIELDS, SOCIAL_DOMAINS
 
-log = logging.getLogger("arablocal_v2")
+log = logging.getLogger("arablocal")
 
 
 class StorageManager:

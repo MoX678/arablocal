@@ -65,7 +65,7 @@ a = Analysis(
         *apify_datas,
         *scrapling_datas,
         # Bundle proxies template if exists
-        ("proxies.txt", "."),
+        ("proxies.txt.example", "."),
     ],
     hiddenimports=hidden_imports,
     hookspath=[],
@@ -99,7 +99,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,  # Keep console for debugging; set to False for release
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

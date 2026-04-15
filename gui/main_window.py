@@ -17,7 +17,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ArabLocal Scraper v3")
+        from core import __version__
+        self.setWindowTitle(f"ArabLocal Scraper v{__version__}")
         self.setMinimumSize(1100, 700)
         self.resize(1280, 800)
 

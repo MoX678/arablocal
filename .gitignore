@@ -1,0 +1,44 @@
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+
+# ─── Virtual environments ───
+.venv/
+venv/
+env/
+.env
+
+# ─── PyInstaller build ───
+build/
+dist/
+
+# ─── IDE / Editor ───
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Agent / Copilot metadata ───
+.agents/
+.augment*/
+skills-lock.json
+
+# ─── Scraped data & output ───
+output/
+scrapped/
+export.csv
+
+# ─── Screenshots / images ───
+image.png
+
+# ─── Sensitive / runtime files ───
+proxies.txt
+*.db
+*.sqlite
+*.log
