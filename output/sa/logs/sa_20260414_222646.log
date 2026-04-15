@@ -1,0 +1,246 @@
+2026-04-14 22:26:46,587 [INFO] Engine [sa] initialized: base=https://arablocal.com, concurrency=4, proxies=0, limit=10
+2026-04-14 22:26:46,588 [INFO] [L0] Discovering categories from https://arablocal.com/business
+2026-04-14 22:26:48,569 [INFO] [session] Stealth browser session started (page pool)
+2026-04-14 22:26:49,438 [INFO] [L0] Found 239 raw category hrefs
+2026-04-14 22:26:49,648 [INFO] [L0] Found 239 categories
+2026-04-14 22:26:49,649 [INFO]   • Access Platform -> https://arablocal.com/business/category/access-platform
+2026-04-14 22:26:49,649 [INFO]   • Accessory -> https://arablocal.com/business/category/accessory
+2026-04-14 22:26:49,649 [INFO]   • Accomodation -> https://arablocal.com/business/category/accomodation
+2026-04-14 22:26:49,649 [INFO]   • Accounting -> https://arablocal.com/business/category/accounting
+2026-04-14 22:26:49,649 [INFO]   • Acoustical Consultants -> https://arablocal.com/business/category/acoustical-consultants
+2026-04-14 22:26:49,649 [INFO]   • Activities & Fireworks -> https://arablocal.com/business/category/activities-&-fireworks
+2026-04-14 22:26:49,649 [INFO]   • Advertising -> https://arablocal.com/business/category/advertising
+2026-04-14 22:26:49,649 [INFO]   • Advertising & Marketing Services -> https://arablocal.com/business/category/advertising-&-marketing-services
+2026-04-14 22:26:49,649 [INFO]   • Aerial Access Systems -> https://arablocal.com/business/category/aerial-access-systems
+2026-04-14 22:26:49,649 [INFO]   • Aeronautic And Space  -> https://arablocal.com/business/category/aeronautic-and-space-
+2026-04-14 22:26:49,649 [INFO]   • Agriculture & Greenery -> https://arablocal.com/business/category/agriculture-&-greenery
+2026-04-14 22:26:49,649 [INFO]   • Air Conditioning -> https://arablocal.com/business/category/air-conditioning
+2026-04-14 22:26:49,649 [INFO]   • Air Conditioning B2B -> https://arablocal.com/business/category/air-conditioning-b2b
+2026-04-14 22:26:49,649 [INFO]   • Air Conditioning Repair Services -> https://arablocal.com/business/category/air-conditioning-repair-services
+2026-04-14 22:26:49,649 [INFO]   • Aircraft -> https://arablocal.com/business/category/aircraft
+2026-04-14 22:26:49,649 [INFO]   • Airlines -> https://arablocal.com/business/category/airlines
+2026-04-14 22:26:49,650 [INFO]   • Airport Services -> https://arablocal.com/business/category/airport-services
+2026-04-14 22:26:49,650 [INFO]   • Airports -> https://arablocal.com/business/category/airports
+2026-04-14 22:26:49,650 [INFO]   • Aloes Wood & Aloes Wood Oil -> https://arablocal.com/business/category/aloes-wood-&-aloes-wood-oil
+2026-04-14 22:26:49,650 [INFO]   • Aluminum Dealers & Manufacturers -> https://arablocal.com/business/category/aluminum-dealers-&-manufacturers
+2026-04-14 22:26:49,650 [INFO]   • Animal -> https://arablocal.com/business/category/animal
+2026-04-14 22:26:49,650 [INFO]   • Antennas -> https://arablocal.com/business/category/antennas
+2026-04-14 22:26:49,650 [INFO]   • Apparel -> https://arablocal.com/business/category/apparel
+2026-04-14 22:26:49,650 [INFO]   • Apparel Wholesale Dealers,Distributors And Manufacturers -> https://arablocal.com/business/category/apparel-wholesale-dealers,distributors-and-manufacturers
+2026-04-14 22:26:49,650 [INFO]   • Aquariums   Acrylic Basins & Materials -> https://arablocal.com/business/category/aquariums---acrylic-basins-&-materials
+2026-04-14 22:26:49,650 [INFO]   • Arabic Translation Services -> https://arablocal.com/business/category/arabic-translation-services
+2026-04-14 22:26:49,650 [INFO]   • Art  Metal Works & Dealers  -> https://arablocal.com/business/category/art--metal-works-&-dealers-
+2026-04-14 22:26:49,650 [INFO]   • Arts -> https://arablocal.com/business/category/arts
+2026-04-14 22:26:49,650 [INFO]   • Assayers -> https://arablocal.com/business/category/assayers
+2026-04-14 22:26:49,650 [INFO]   • Assorted -> https://arablocal.com/business/category/assorted
+2026-04-14 22:26:49,650 [INFO]   • Atm -> https://arablocal.com/business/category/atm
+2026-04-14 22:26:49,650 [INFO]   • Audio & Video Services -> https://arablocal.com/business/category/audio-&-video-services
+2026-04-14 22:26:49,650 [INFO]   • Automation Systems -> https://arablocal.com/business/category/automation-systems
+2026-04-14 22:26:49,650 [INFO]   • Automotive -> https://arablocal.com/business/category/automotive
+2026-04-14 22:26:49,650 [INFO]   • Aviation -> https://arablocal.com/business/category/aviation
+2026-04-14 22:26:49,650 [INFO]   • Ayurveda -> https://arablocal.com/business/category/ayurveda
+2026-04-14 22:26:49,650 [INFO]   • Bags Nylon ,Pvc & Paper -> https://arablocal.com/business/category/bags-nylon-,pvc-&-paper
+2026-04-14 22:26:49,650 [INFO]   • Bamboo Rattan & Wicker Products -> https://arablocal.com/business/category/bamboo-rattan-&-wicker-products
+2026-04-14 22:26:49,650 [INFO]   • Bank -> https://arablocal.com/business/category/bank
+2026-04-14 22:26:49,650 [INFO]   • Banks -> https://arablocal.com/business/category/banks
+2026-04-14 22:26:49,650 [INFO]   • Banks   Automation -> https://arablocal.com/business/category/banks---automation
+2026-04-14 22:26:49,650 [INFO]   • Banners -> https://arablocal.com/business/category/banners
+2026-04-14 22:26:49,651 [INFO]   • Banquet Halls -> https://arablocal.com/business/category/banquet-halls
+2026-04-14 22:26:49,651 [INFO]   • Barbers Equipment & Supplies -> https://arablocal.com/business/category/barbers-equipment-&-supplies
+2026-04-14 22:26:49,651 [INFO]   • Barriers -> https://arablocal.com/business/category/barriers
+2026-04-14 22:26:49,651 [INFO]   • Bathroom Accessories & Cubicles -> https://arablocal.com/business/category/bathroom-accessories-&-cubicles
+2026-04-14 22:26:49,651 [INFO]   • Beauty And Personal Care -> https://arablocal.com/business/category/beauty-and-personal-care
+2026-04-14 22:26:49,651 [INFO]   • Bedding -> https://arablocal.com/business/category/bedding
+2026-04-14 22:26:49,651 [INFO]   • Beekeepers -> https://arablocal.com/business/category/beekeepers
+2026-04-14 22:26:49,651 [INFO]   • Bike -> https://arablocal.com/business/category/bike
+2026-04-14 22:26:49,651 [INFO]   • Binding -> https://arablocal.com/business/category/binding
+2026-04-14 22:26:49,651 [INFO]   • Biological Products -> https://arablocal.com/business/category/biological-products
+2026-04-14 22:26:49,651 [INFO]   • Birds -> https://arablocal.com/business/category/birds
+2026-04-14 22:26:49,651 [INFO]   • Blacksmiths -> https://arablocal.com/business/category/blacksmiths
+2026-04-14 22:26:49,651 [INFO]   • Blasting & Quarrying Contractors -> https://arablocal.com/business/category/blasting-&-quarrying-contractors
+2026-04-14 22:26:49,651 [INFO]   • Boat -> https://arablocal.com/business/category/boat
+2026-04-14 22:26:49,651 [INFO]   • Boilers -> https://arablocal.com/business/category/boilers
+2026-04-14 22:26:49,651 [INFO]   • Bonded Stores -> https://arablocal.com/business/category/bonded-stores
+2026-04-14 22:26:49,651 [INFO]   • Botanical Gardens -> https://arablocal.com/business/category/botanical-gardens
+2026-04-14 22:26:49,651 [INFO]   • Bottles & Bottle Cap -> https://arablocal.com/business/category/bottles-&-bottle-cap
+2026-04-14 22:26:49,651 [INFO]   • Boxes -> https://arablocal.com/business/category/boxes
+2026-04-14 22:26:49,651 [INFO]   • Branch Of General Organization For Social Insurance -> https://arablocal.com/business/category/branch-of-general-organization-for-social-insurance
+2026-04-14 22:26:49,651 [INFO]   • Branch Of The Ministry Of Water And Electricity -> https://arablocal.com/business/category/branch-of-the-ministry-of-water-and-electricity
+2026-04-14 22:26:49,652 [INFO]   • Briquettes -> https://arablocal.com/business/category/briquettes
+2026-04-14 22:26:49,652 [INFO]   • Buffing & Polishing -> https://arablocal.com/business/category/buffing-&-polishing
+2026-04-14 22:26:49,652 [INFO]   • Building -> https://arablocal.com/business/category/building
+2026-04-14 22:26:49,652 [INFO]   • Business B2B -> https://arablocal.com/business/category/business-b2b
+2026-04-14 22:26:49,652 [INFO]   • Butcheries Retail -> https://arablocal.com/business/category/butcheries-retail
+2026-04-14 22:26:49,652 [INFO]   • Cabanas -> https://arablocal.com/business/category/cabanas
+2026-04-14 22:26:49,652 [INFO]   • Cable -> https://arablocal.com/business/category/cable
+2026-04-14 22:26:49,652 [INFO]   • Cafeterias -> https://arablocal.com/business/category/cafeterias
+2026-04-14 22:26:49,652 [INFO]   • Calibration Systems & Services -> https://arablocal.com/business/category/calibration-systems-&-services
+2026-04-14 22:26:49,652 [INFO]   • Calorifier -> https://arablocal.com/business/category/calorifier
+2026-04-14 22:26:49,652 [INFO]   • Camps -> https://arablocal.com/business/category/camps
+2026-04-14 22:26:49,652 [INFO]   • Cargo Services -> https://arablocal.com/business/category/cargo-services
+2026-04-14 22:26:49,652 [INFO]   • Cars -> https://arablocal.com/business/category/cars
+2026-04-14 22:26:49,652 [INFO]   • Cast Iron   Raw Materials -> https://arablocal.com/business/category/cast-iron---raw-materials
+2026-04-14 22:26:49,652 [INFO]   • Certified Translators -> https://arablocal.com/business/category/certified-translators
+2026-04-14 22:26:49,652 [INFO]   • Chaletrentals -> https://arablocal.com/business/category/chaletrentals
+2026-04-14 22:26:49,652 [INFO]   • Charity -> https://arablocal.com/business/category/charity
+2026-04-14 22:26:49,652 [INFO]   • Charts -> https://arablocal.com/business/category/charts
+2026-04-14 22:26:49,652 [INFO]   • Chemical Laboratory Equipment & Supplies -> https://arablocal.com/business/category/chemical-laboratory-equipment-&-supplies
+2026-04-14 22:26:49,652 [INFO]   • Chemicals -> https://arablocal.com/business/category/chemicals
+2026-04-14 22:26:49,652 [INFO]   • Children Apparel -> https://arablocal.com/business/category/children-apparel
+2026-04-14 22:26:49,653 [INFO]   • Church -> https://arablocal.com/business/category/church
+2026-04-14 22:26:49,653 [INFO]   • Cleansers -> https://arablocal.com/business/category/cleansers
+2026-04-14 22:26:49,653 [INFO]   • Clothing B2B -> https://arablocal.com/business/category/clothing-b2b
+2026-04-14 22:26:49,653 [INFO]   • Club Room Equipment & Services -> https://arablocal.com/business/category/club-room-equipment-&-services
+2026-04-14 22:26:49,653 [INFO]   • Coffee Shop   Equipment & Accessories -> https://arablocal.com/business/category/coffee-shop---equipment-&-accessories
+2026-04-14 22:26:49,653 [INFO]   • Coffee Shops -> https://arablocal.com/business/category/coffee-shops
+2026-04-14 22:26:49,653 [INFO]   • Coins & Tokens -> https://arablocal.com/business/category/coins-&-tokens
+2026-04-14 22:26:49,653 [INFO]   • Commerce & Industry -> https://arablocal.com/business/category/commerce-&-industry
+2026-04-14 22:26:49,653 [INFO]   • Communication  -> https://arablocal.com/business/category/communication-
+2026-04-14 22:26:49,653 [INFO]   • Companies & Industries -> https://arablocal.com/business/category/companies-&-industries
+2026-04-14 22:26:49,653 [INFO]   • Computer -> https://arablocal.com/business/category/computer
+2026-04-14 22:26:49,653 [INFO]   • Construction -> https://arablocal.com/business/category/construction
+2026-04-14 22:26:49,653 [INFO]   • Consultancy -> https://arablocal.com/business/category/consultancy
+2026-04-14 22:26:49,653 [INFO]   • Consultants -> https://arablocal.com/business/category/consultants
+2026-04-14 22:26:49,653 [INFO]   • Contractors -> https://arablocal.com/business/category/contractors
+2026-04-14 22:26:49,653 [INFO]   • Control System & Regulators -> https://arablocal.com/business/category/control-system-&-regulators
+2026-04-14 22:26:49,653 [INFO]   • Copying Machines & Supplies -> https://arablocal.com/business/category/copying-machines-&-supplies
+2026-04-14 22:26:49,653 [INFO]   • Courier -> https://arablocal.com/business/category/courier
+2026-04-14 22:26:49,653 [INFO]   • Credit Cards Companies & Cheque Cashing Protection Section -> https://arablocal.com/business/category/credit-cards-companies-&-cheque-cashing-protection-section
+2026-04-14 22:26:49,653 [INFO]   • Day Care -> https://arablocal.com/business/category/day-care
+2026-04-14 22:26:49,653 [INFO]   • De Lamintation Services -> https://arablocal.com/business/category/de-lamintation-services
+2026-04-14 22:26:49,653 [INFO]   • De Watering -> https://arablocal.com/business/category/de-watering
+2026-04-14 22:26:49,653 [INFO]   • Dealers Distributors Manufacturers -> https://arablocal.com/business/category/dealers-distributors-manufacturers
+2026-04-14 22:26:49,653 [INFO]   • Decoration Contractors -> https://arablocal.com/business/category/decoration-contractors
+2026-04-14 22:26:49,653 [INFO]   • Design -> https://arablocal.com/business/category/design
+2026-04-14 22:26:49,653 [INFO]   • Design & Installation -> https://arablocal.com/business/category/design-&-installation
+2026-04-14 22:26:49,653 [INFO]   • Digital -> https://arablocal.com/business/category/digital
+2026-04-14 22:26:49,653 [INFO]   • Doctors -> https://arablocal.com/business/category/doctors
+2026-04-14 22:26:49,653 [INFO]   • Drainage  -> https://arablocal.com/business/category/drainage-
+2026-04-14 22:26:49,653 [INFO]   • Education -> https://arablocal.com/business/category/education
+2026-04-14 22:26:49,653 [INFO]   • Electrical -> https://arablocal.com/business/category/electrical
+2026-04-14 22:26:49,653 [INFO]   • Electrical B2B -> https://arablocal.com/business/category/electrical-b2b
+2026-04-14 22:26:49,653 [INFO]   • Electro Mechanical  -> https://arablocal.com/business/category/electro-mechanical-
+2026-04-14 22:26:49,653 [INFO]   • Electronics -> https://arablocal.com/business/category/electronics
+2026-04-14 22:26:49,653 [INFO]   • Electronics B2B -> https://arablocal.com/business/category/electronics-b2b
+2026-04-14 22:26:49,653 [INFO]   • Embassies -> https://arablocal.com/business/category/embassies
+2026-04-14 22:26:49,654 [INFO]   • Emergency -> https://arablocal.com/business/category/emergency
+2026-04-14 22:26:49,654 [INFO]   • Entertainment -> https://arablocal.com/business/category/entertainment
+2026-04-14 22:26:49,654 [INFO]   • Equipment & Supplies -> https://arablocal.com/business/category/equipment-&-supplies
+2026-04-14 22:26:49,654 [INFO]   • Events -> https://arablocal.com/business/category/events
+2026-04-14 22:26:49,654 [INFO]   • Exchange -> https://arablocal.com/business/category/exchange
+2026-04-14 22:26:49,654 [INFO]   • Explosives -> https://arablocal.com/business/category/explosives
+2026-04-14 22:26:49,654 [INFO]   • Extreme Sports -> https://arablocal.com/business/category/extreme-sports
+2026-04-14 22:26:49,654 [INFO]   • Fabric Dealers,Distributors & Manufacturers -> https://arablocal.com/business/category/fabric-dealers,distributors-&-manufacturers
+2026-04-14 22:26:49,654 [INFO]   • Farms -> https://arablocal.com/business/category/farms
+2026-04-14 22:26:49,654 [INFO]   • Fashion Designing Institutes -> https://arablocal.com/business/category/fashion-designing-institutes
+2026-04-14 22:26:49,654 [INFO]   • Film Production -> https://arablocal.com/business/category/film-production
+2026-04-14 22:26:49,654 [INFO]   • Filtering -> https://arablocal.com/business/category/filtering
+2026-04-14 22:26:49,654 [INFO]   • Finance B2B -> https://arablocal.com/business/category/finance-b2b
+2026-04-14 22:26:49,654 [INFO]   • Finance Companies -> https://arablocal.com/business/category/finance-companies
+2026-04-14 22:26:49,654 [INFO]   • Fitness -> https://arablocal.com/business/category/fitness
+2026-04-14 22:26:49,654 [INFO]   • Fitness Equipment Suppliers -> https://arablocal.com/business/category/fitness-equipment-suppliers
+2026-04-14 22:26:49,654 [INFO]   • Floors & Ceilings -> https://arablocal.com/business/category/floors-&-ceilings
+2026-04-14 22:26:49,654 [INFO]   • Florist -> https://arablocal.com/business/category/florist
+2026-04-14 22:26:49,654 [INFO]   • Flowers -> https://arablocal.com/business/category/flowers
+2026-04-14 22:26:49,654 [INFO]   • Food -> https://arablocal.com/business/category/food
+2026-04-14 22:26:49,654 [INFO]   • Food B2B -> https://arablocal.com/business/category/food-b2b
+2026-04-14 22:26:49,654 [INFO]   • Footwear -> https://arablocal.com/business/category/footwear
+2026-04-14 22:26:49,654 [INFO]   • Forgings -> https://arablocal.com/business/category/forgings
+2026-04-14 22:26:49,654 [INFO]   • Foundations -> https://arablocal.com/business/category/foundations
+2026-04-14 22:26:49,654 [INFO]   • Fruits  And Vegetables -> https://arablocal.com/business/category/fruits--and-vegetables
+2026-04-14 22:26:49,654 [INFO]   • Fruits And Vegetables B2B -> https://arablocal.com/business/category/fruits-and-vegetables-b2b
+2026-04-14 22:26:49,654 [INFO]   • Furniture -> https://arablocal.com/business/category/furniture
+2026-04-14 22:26:49,654 [INFO]   • Furniture B2B -> https://arablocal.com/business/category/furniture-b2b
+2026-04-14 22:26:49,654 [INFO]   • Geography -> https://arablocal.com/business/category/geography
+2026-04-14 22:26:49,654 [INFO]   • Gift & Novelty -> https://arablocal.com/business/category/gift-&-novelty
+2026-04-14 22:26:49,654 [INFO]   • Glass Processors -> https://arablocal.com/business/category/glass-processors
+2026-04-14 22:26:49,654 [INFO]   • Golf Equipment -> https://arablocal.com/business/category/golf-equipment
+2026-04-14 22:26:49,654 [INFO]   • Government -> https://arablocal.com/business/category/government
+2026-04-14 22:26:49,654 [INFO]   • Hair Care -> https://arablocal.com/business/category/hair-care
+2026-04-14 22:26:49,654 [INFO]   • Handy Man -> https://arablocal.com/business/category/handy-man
+2026-04-14 22:26:49,654 [INFO]   • Health & Medical Care B2B -> https://arablocal.com/business/category/health-&-medical-care-b2b
+2026-04-14 22:26:49,654 [INFO]   • Health Care -> https://arablocal.com/business/category/health-care
+2026-04-14 22:26:49,654 [INFO]   • Home Decor Stores -> https://arablocal.com/business/category/home-decor-stores
+2026-04-14 22:26:49,654 [INFO]   • Hospitals & Clinics -> https://arablocal.com/business/category/hospitals-&-clinics
+2026-04-14 22:26:49,654 [INFO]   • Hotels & Resorts -> https://arablocal.com/business/category/hotels-&-resorts
+2026-04-14 22:26:49,654 [INFO]   • Household  -> https://arablocal.com/business/category/household-
+2026-04-14 22:26:49,654 [INFO]   • Import & Export -> https://arablocal.com/business/category/import-&-export
+2026-04-14 22:26:49,654 [INFO]   • Industrial -> https://arablocal.com/business/category/industrial
+2026-04-14 22:26:49,654 [INFO]   • Instrument And Instrumentation -> https://arablocal.com/business/category/instrument-and-instrumentation
+2026-04-14 22:26:49,654 [INFO]   • Insurance -> https://arablocal.com/business/category/insurance
+2026-04-14 22:26:49,654 [INFO]   • Internet -> https://arablocal.com/business/category/internet
+2026-04-14 22:26:49,654 [INFO]   • Inventors -> https://arablocal.com/business/category/inventors
+2026-04-14 22:26:49,654 [INFO]   • Investigators -> https://arablocal.com/business/category/investigators
+2026-04-14 22:26:49,654 [INFO]   • Jet Ski Equipment Dealers -> https://arablocal.com/business/category/jet-ski-equipment-dealers
+2026-04-14 22:26:49,654 [INFO]   • Jewellery -> https://arablocal.com/business/category/jewellery
+2026-04-14 22:26:49,654 [INFO]   • Jobs -> https://arablocal.com/business/category/jobs
+2026-04-14 22:26:49,654 [INFO]   • Kitchen Equipment Suppliers -> https://arablocal.com/business/category/kitchen-equipment-suppliers
+2026-04-14 22:26:49,654 [INFO]   • Laboratories -> https://arablocal.com/business/category/laboratories
+2026-04-14 22:26:49,654 [INFO]   • Legal -> https://arablocal.com/business/category/legal
+2026-04-14 22:26:49,654 [INFO]   • Live Stock -> https://arablocal.com/business/category/live-stock
+2026-04-14 22:26:49,654 [INFO]   • Logistic Services -> https://arablocal.com/business/category/logistic-services
+2026-04-14 22:26:49,654 [INFO]   • Logistics -> https://arablocal.com/business/category/logistics
+2026-04-14 22:26:49,654 [INFO]   • Marine & Shipping -> https://arablocal.com/business/category/marine-&-shipping
+2026-04-14 22:26:49,656 [INFO]   • Men Apparel -> https://arablocal.com/business/category/men-apparel
+2026-04-14 22:26:49,656 [INFO]   • Mobile -> https://arablocal.com/business/category/mobile
+2026-04-14 22:26:49,656 [INFO]   • Mosque -> https://arablocal.com/business/category/mosque
+2026-04-14 22:26:49,656 [INFO]   • Navy -> https://arablocal.com/business/category/navy
+2026-04-14 22:26:49,656 [INFO]   • Notary Services -> https://arablocal.com/business/category/notary-services
+2026-04-14 22:26:49,656 [INFO]   • Oil & Gas -> https://arablocal.com/business/category/oil-&-gas
+2026-04-14 22:26:49,656 [INFO]   • Organizations -> https://arablocal.com/business/category/organizations
+2026-04-14 22:26:49,656 [INFO]   • Outdoor Decorators -> https://arablocal.com/business/category/outdoor-decorators
+2026-04-14 22:26:49,656 [INFO]   • Packaging Machinery -> https://arablocal.com/business/category/packaging-machinery
+2026-04-14 22:26:49,656 [INFO]   • Paints -> https://arablocal.com/business/category/paints
+2026-04-14 22:26:49,656 [INFO]   • Paper Products Dealers, Distributors & Manufacturers -> https://arablocal.com/business/category/paper-products-dealers,-distributors-&-manufacturers
+2026-04-14 22:26:49,656 [INFO]   • Payment Gateway Solutions -> https://arablocal.com/business/category/payment-gateway-solutions
+2026-04-14 22:26:49,656 [INFO]   • Personal Care Products B2B -> https://arablocal.com/business/category/personal-care-products-b2b
+2026-04-14 22:26:49,656 [INFO]   • Pest Control Services -> https://arablocal.com/business/category/pest-control-services
+2026-04-14 22:26:49,656 [INFO]   • Petrol Pump -> https://arablocal.com/business/category/petrol-pump
+2026-04-14 22:26:49,656 [INFO]   • Pets -> https://arablocal.com/business/category/pets
+2026-04-14 22:26:49,656 [INFO]   • Photography -> https://arablocal.com/business/category/photography
+2026-04-14 22:26:49,656 [INFO]   • Pin Up Display Board Manufacturers -> https://arablocal.com/business/category/pin-up-display-board-manufacturers
+2026-04-14 22:26:49,656 [INFO]   • Plastics & Plastic Products,Supplies -> https://arablocal.com/business/category/plastics-&-plastic-products,supplies
+2026-04-14 22:26:49,656 [INFO]   • Plumbing -> https://arablocal.com/business/category/plumbing
+2026-04-14 22:26:49,656 [INFO]   • Pr Companies -> https://arablocal.com/business/category/pr-companies
+2026-04-14 22:26:49,656 [INFO]   • Printing Services -> https://arablocal.com/business/category/printing-services
+2026-04-14 22:26:49,656 [INFO]   • Product Dealers & Distributors -> https://arablocal.com/business/category/product-dealers-&-distributors
+2026-04-14 22:26:49,656 [INFO]   • Public Postal Services -> https://arablocal.com/business/category/public-postal-services
+2026-04-14 22:26:49,656 [INFO]   • Real Estate -> https://arablocal.com/business/category/real-estate
+2026-04-14 22:26:49,656 [INFO]   • Relocation Services -> https://arablocal.com/business/category/relocation-services
+2026-04-14 22:26:49,656 [INFO]   • Repairs -> https://arablocal.com/business/category/repairs
+2026-04-14 22:26:49,656 [INFO]   • Research & Analysis -> https://arablocal.com/business/category/research-&-analysis
+2026-04-14 22:26:49,656 [INFO]   • Restaurants -> https://arablocal.com/business/category/restaurants
+2026-04-14 22:26:49,656 [INFO]   • Restaurants Complex -> https://arablocal.com/business/category/restaurants-complex
+2026-04-14 22:26:49,656 [INFO]   • Safety  -> https://arablocal.com/business/category/safety-
+2026-04-14 22:26:49,656 [INFO]   • Schools  -> https://arablocal.com/business/category/schools-
+2026-04-14 22:26:49,656 [INFO]   • Security -> https://arablocal.com/business/category/security
+2026-04-14 22:26:49,656 [INFO]   • Services -> https://arablocal.com/business/category/services
+2026-04-14 22:26:49,656 [INFO]   • Services B2B -> https://arablocal.com/business/category/services-b2b
+2026-04-14 22:26:49,656 [INFO]   • Sheesha -> https://arablocal.com/business/category/sheesha
+2026-04-14 22:26:49,656 [INFO]   • Shopping -> https://arablocal.com/business/category/shopping
+2026-04-14 22:26:49,656 [INFO]   • Sound And Video Equipment -> https://arablocal.com/business/category/sound-and-video-equipment
+2026-04-14 22:26:49,656 [INFO]   • Sports -> https://arablocal.com/business/category/sports
+2026-04-14 22:26:49,656 [INFO]   • Stationery -> https://arablocal.com/business/category/stationery
+2026-04-14 22:26:49,656 [INFO]   • Stores -> https://arablocal.com/business/category/stores
+2026-04-14 22:26:49,656 [INFO]   • Tailoring -> https://arablocal.com/business/category/tailoring
+2026-04-14 22:26:49,656 [INFO]   • Tailoring Equipment & Accessories Dealers, Distributors & Manufacturers -> https://arablocal.com/business/category/tailoring-equipment-&-accessories-dealers,-distributors-&-manufacturers
+2026-04-14 22:26:49,656 [INFO]   • Tank Manufacturers And Suppliers -> https://arablocal.com/business/category/tank-manufacturers-and-suppliers
+2026-04-14 22:26:49,656 [INFO]   • Taxi -> https://arablocal.com/business/category/taxi
+2026-04-14 22:26:49,656 [INFO]   • Tinning -> https://arablocal.com/business/category/tinning
+2026-04-14 22:26:49,656 [INFO]   • Tourist Attractions -> https://arablocal.com/business/category/tourist-attractions
+2026-04-14 22:26:49,656 [INFO]   • Traffic Sign Board Dealers -> https://arablocal.com/business/category/traffic-sign-board-dealers
+2026-04-14 22:26:49,656 [INFO]   • Training -> https://arablocal.com/business/category/training
+2026-04-14 22:26:49,657 [INFO]   • Transport -> https://arablocal.com/business/category/transport
+2026-04-14 22:26:49,657 [INFO]   • Travel -> https://arablocal.com/business/category/travel
+2026-04-14 22:26:49,657 [INFO]   • Traveller'S Cheques -> https://arablocal.com/business/category/traveller's-cheques
+2026-04-14 22:26:49,657 [INFO]   • Universities -> https://arablocal.com/business/category/universities
+2026-04-14 22:26:49,657 [INFO]   • Vehicles -> https://arablocal.com/business/category/vehicles
+2026-04-14 22:26:49,657 [INFO]   • Vehicles Spare Parts -> https://arablocal.com/business/category/vehicles-spare-parts
+2026-04-14 22:26:49,657 [INFO]   • Waste Disposal Service -> https://arablocal.com/business/category/waste-disposal-service
+2026-04-14 22:26:49,657 [INFO]   • Water Treatment Equipment. Services & Supplies -> https://arablocal.com/business/category/water-treatment-equipment.-services-&-supplies
+2026-04-14 22:26:49,657 [INFO]   • Wedding -> https://arablocal.com/business/category/wedding
+2026-04-14 22:26:49,657 [INFO]   • Women Apparel -> https://arablocal.com/business/category/women-apparel
+2026-04-14 22:26:49,657 [INFO]   • Wood Products -> https://arablocal.com/business/category/wood-products
+2026-04-14 22:26:49,657 [INFO]   • Work Shops -> https://arablocal.com/business/category/work-shops
+2026-04-14 22:26:49,660 [INFO] [L1] health-care — already completed (checkpoint), skipping
+2026-04-14 22:26:51,262 [INFO] [session] Browser session closed

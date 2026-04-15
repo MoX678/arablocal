@@ -1,0 +1,6 @@
+scrapling[fetchers]
+PyQt6
+rich
+
+# Build (not needed at runtime):
+# pyinstaller
