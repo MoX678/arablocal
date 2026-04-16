@@ -36,6 +36,7 @@ export.csv
 
 # ─── Sensitive / runtime files ───
 proxies.txt
+.github_token
 *.db
 *.sqlite
 *.log

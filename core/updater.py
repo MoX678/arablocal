@@ -19,6 +19,61 @@ GITHUB_REPO = "MoX678/arablocal"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 ASSET_PATTERN = "ArabLocal-v{version}-win64.zip"
 
+# Read-only fine-grained PAT — contents:read on MoX678/arablocal only.
+# This token can ONLY read releases. It cannot push, delete, or modify anything.
+_GITHUB_TOKEN: Optional[str] = None
+
+
+def _get_github_token() -> Optional[str]:
+    """Load the GitHub token (read-only PAT for release checks).
+
+    Checks in order:
+    1. Module-level _GITHUB_TOKEN
+    2. ARABLOCAL_GITHUB_TOKEN env var
+    3. .github_token file next to the executable
+    """
+    global _GITHUB_TOKEN
+    if _GITHUB_TOKEN:
+        return _GITHUB_TOKEN
+
+    # Env var
+    token = os.environ.get("ARABLOCAL_GITHUB_TOKEN", "").strip()
+    if token:
+        _GITHUB_TOKEN = token
+        return token
+
+    # File next to exe
+    if getattr(sys, "frozen", False):
+        token_path = os.path.join(os.path.dirname(sys.executable), ".github_token")
+    else:
+        token_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            ".github_token",
+        )
+    try:
+        if os.path.isfile(token_path):
+            with open(token_path, "r") as f:
+                token = f.read().strip()
+            if token:
+                _GITHUB_TOKEN = token
+                return token
+    except Exception:
+        pass
+
+    return None
+
+
+def _make_request(url: str, timeout: int = 10) -> urllib.request.Request:
+    """Build a request with auth headers if a token is available."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "ArabLocal-Scraper-Updater",
+    }
+    token = _get_github_token()
+    if token:
+        headers["Authorization"] = f"token {token}"
+    return urllib.request.Request(url, headers=headers)
+
 
 def _parse_version(tag: str) -> tuple[int, ...]:
     """Parse 'v3.0.1' or '3.0.1-beta' into (3, 0, 1).
@@ -38,13 +93,7 @@ def check_for_update(current_version: str) -> Optional[dict]:
     Returns dict with update info or None if up-to-date.
     """
     try:
-        req = urllib.request.Request(
-            GITHUB_API,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "ArabLocal-Scraper-Updater",
-            },
-        )
+        req = _make_request(GITHUB_API)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
 
@@ -95,10 +144,9 @@ def download_update(url: str, progress_callback=None) -> Optional[str]:
         Path to the downloaded zip file, or None on failure.
     """
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "ArabLocal-Scraper-Updater"},
-        )
+        req = _make_request(url, timeout=300)
+        # For private repo assets, need Accept: application/octet-stream
+        req.add_header("Accept", "application/octet-stream")
         with urllib.request.urlopen(req, timeout=300) as resp:
             total = int(resp.headers.get("Content-Length", 0))
             tmp_dir = tempfile.mkdtemp(prefix="arablocal_update_")

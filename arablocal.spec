@@ -66,6 +66,8 @@ a = Analysis(
         *scrapling_datas,
         # Bundle proxies template if exists
         ("proxies.txt.example", "."),
+        # Read-only GitHub PAT for private repo update checks
+        (".github_token", "."),
     ],
     hiddenimports=hidden_imports,
     hookspath=[],
