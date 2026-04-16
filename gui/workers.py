@@ -127,6 +127,7 @@ class MultiCategoryFetchWorker(QThread):
 
     categories_ready = pyqtSignal(str, list)
     country_error = pyqtSignal(str, str)
+    discovery_log = pyqtSignal(str, str, str)   # country, level, message
     all_finished = pyqtSignal()
 
     def __init__(self, countries: List[str], parent=None):
@@ -160,13 +161,25 @@ class MultiCategoryFetchWorker(QThread):
                 output_dir=os.path.join("output", country),
             )
             job.ensure_dirs()
+            self.discovery_log.emit(country, "INFO", f"Connecting to {job.base_url}/business ...")
             engine = ArabLocalEngine(job=job, concurrency=2)
             try:
                 cats = await discover_categories(engine)
+                if cats:
+                    self.discovery_log.emit(
+                        country, "SUCCESS",
+                        f"Found {len(cats)} categories",
+                    )
+                else:
+                    self.discovery_log.emit(
+                        country, "WARNING",
+                        f"0 categories found — site may be geo-blocked or under Cloudflare protection",
+                    )
                 self.categories_ready.emit(country, cats or [])
             finally:
                 await engine._close_session()
         except Exception as e:
+            self.discovery_log.emit(country, "ERROR", f"Discovery failed: {e}")
             self.country_error.emit(country, str(e))
 
 

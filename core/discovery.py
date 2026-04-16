@@ -22,18 +22,22 @@ console = Console(quiet=True)
 # ─── Direct fetch helper (no proxy) for discovery fallback ───────────────────
 
 async def _direct_fetch(url: str):
-    """Fetch a page directly (no proxy) using a throwaway stealth session."""
+    """Fetch a page directly (no proxy) using a throwaway stealth session.
+
+    Always attempts Cloudflare solving — this is a fallback used when the
+    primary session got a blocked/empty page.
+    """
     from scrapling.fetchers import AsyncStealthySession
 
     session = AsyncStealthySession(
         headless=True,
         disable_resources=True,
         block_ads=True,
-        timeout=15000,
+        timeout=30000,
     )
     try:
         await session.start()
-        page = await session.fetch(url=url)
+        page = await session.fetch(url=url, solve_cloudflare=True)
         return page
     except Exception as e:
         log.warning(f"[L0] Direct fallback fetch failed: {e}")
@@ -73,9 +77,9 @@ async def discover_categories(engine: "ArabLocalEngine") -> List[dict]:
     all_hrefs = page.css("a[href*='/business/category/']::attr(href)").getall()
     log.info(f"[L0] Found {len(all_hrefs)} raw category hrefs")
 
-    # Proxy returned a page but no categories (likely captcha/block) — retry direct
-    if not all_hrefs and engine.proxy_pool:
-        log.warning("[L0] Page loaded via proxy but 0 categories found — retrying direct")
+    # Page loaded but no categories (captcha/Cloudflare/block) — retry direct with CF solving
+    if not all_hrefs:
+        log.warning("[L0] Page loaded but 0 categories found — retrying direct with CF solving")
         page2 = await _direct_fetch(url)
         if page2:
             all_hrefs = page2.css("a[href*='/business/category/']::attr(href)").getall()
@@ -124,9 +128,9 @@ async def discover_categories_kuwait(engine: "ArabLocalEngine") -> List[dict]:
     all_hrefs = page.css("a[href*='/business/categories/']::attr(href)").getall()
     log.info(f"[L0-KW] Found {len(all_hrefs)} raw category hrefs")
 
-    # Proxy returned a page but no categories — retry direct
-    if not all_hrefs and engine.proxy_pool:
-        log.warning("[L0-KW] Page loaded via proxy but 0 categories found — retrying direct")
+    # Page loaded but no categories (captcha/Cloudflare/block) — retry direct with CF solving
+    if not all_hrefs:
+        log.warning("[L0-KW] Page loaded but 0 categories found — retrying direct with CF solving")
         page2 = await _direct_fetch(url)
         if page2:
             all_hrefs = page2.css("a[href*='/business/categories/']::attr(href)").getall()

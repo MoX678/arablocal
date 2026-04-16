@@ -118,8 +118,8 @@ class JobConfig:
 
     @property
     def needs_cloudflare(self) -> bool:
-        """Disabled — no countries currently need CF solving."""
-        return False
+        """All arablocal sites use Cloudflare — needed for non-ME IPs."""
+        return True
 
     @property
     def db_path(self) -> str:

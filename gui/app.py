@@ -53,6 +53,16 @@ def main():
     ))
     _logger.addHandler(_err_handler)
 
+    # Full debug log — captures everything (discovery, fetch, CF) for troubleshooting
+    _debug_handler = logging.FileHandler(
+        os.path.join(_errors_dir, "debug.log"), encoding="utf-8", mode="w",
+    )
+    _debug_handler.setLevel(logging.DEBUG)
+    _debug_handler.setFormatter(logging.Formatter(
+        "%(asctime)s  %(levelname)-7s  %(message)s", datefmt="%H:%M:%S"
+    ))
+    _logger.addHandler(_debug_handler)
+
     # Also silence scrapling's internal logger (prints "Fetched (200)..." to terminal)
     logging.getLogger("scrapling").setLevel(logging.CRITICAL)
     logging.getLogger("scrapling").propagate = False

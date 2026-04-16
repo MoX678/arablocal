@@ -21,8 +21,15 @@ ASSET_PATTERN = "ArabLocal-v{version}-win64.zip"
 
 
 def _parse_version(tag: str) -> tuple[int, ...]:
-    """Parse 'v3.0.1' or '3.0.1' into (3, 0, 1)."""
-    return tuple(int(x) for x in tag.lstrip("v").split("."))
+    """Parse 'v3.0.1' or '3.0.1-beta' into (3, 0, 1).
+
+    Strips any pre-release suffix (e.g. '-beta', '-rc1') before parsing.
+    """
+    import re as _re
+    clean = _re.split(r"[^0-9.]", tag.lstrip("v"), maxsplit=1)[0].rstrip(".")
+    if not clean:
+        return (0,)
+    return tuple(int(x) for x in clean.split(".") if x.isdigit())
 
 
 def check_for_update(current_version: str) -> Optional[dict]:
@@ -73,7 +80,7 @@ def check_for_update(current_version: str) -> Optional[dict]:
             "html_url": data.get("html_url", ""),
         }
     except Exception as e:
-        log.debug(f"Update check failed: {e}")
+        log.warning(f"Update check failed: {e}")
         return None
 
 
@@ -154,7 +161,7 @@ def apply_update(zip_path: str) -> bool:
 title ArabLocal Updater
 echo Waiting for application to close...
 :waitloop
-tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+tasklist /FI "PID eq {pid}" /NH 2>NUL | findstr /B /C:" {pid} " >NUL
 if not errorlevel 1 (
     timeout /t 1 /nobreak >NUL
     goto waitloop

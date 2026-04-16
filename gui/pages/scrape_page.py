@@ -722,6 +722,7 @@ class ScrapePage(QWidget):
         self._cat_worker = MultiCategoryFetchWorker(to_fetch)
         self._cat_worker.categories_ready.connect(self._on_cats_ready)
         self._cat_worker.country_error.connect(self._on_cat_error)
+        self._cat_worker.discovery_log.connect(self._on_log_message)
         self._cat_worker.all_finished.connect(self._on_cats_done)
         self._cat_worker.start()
 
