@@ -20,7 +20,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [3/3] Checking browser installation...
+echo [3/3] Bundling config files...
+if exist ".github_token" (
+    copy /y ".github_token" "dist\ArabLocal\.github_token" >nul
+    echo      .github_token copied to dist.
+)
+
+echo [4/4] Checking browser installation...
 echo.
 echo ══════════════════════════════════════════════
 echo  BUILD COMPLETE — dist\ArabLocal\ArabLocal.exe
