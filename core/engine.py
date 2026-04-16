@@ -127,12 +127,12 @@ class ArabLocalEngine:
                 disable_resources=True,
                 block_ads=True,
                 blocked_domains=blocked,
-                timeout=10000,
+                timeout=30000,
                 max_pages=self.concurrency,
             )
             if self.proxy_pool:
                 session_kwargs["proxy_rotator"] = ProxyRotator(self.proxy_pool)
-                session_kwargs["timeout"] = 20000
+                session_kwargs["timeout"] = 40000
                 session_kwargs["dns_over_https"] = True
                 log.info(f"[session] ProxyRotator enabled with {len(self.proxy_pool)} proxies")
             self._session = AsyncStealthySession(**session_kwargs)

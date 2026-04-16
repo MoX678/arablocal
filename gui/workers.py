@@ -144,13 +144,13 @@ class MultiCategoryFetchWorker(QThread):
             self.all_finished.emit()
 
     async def _fetch_all(self):
-        # Limit concurrent browser sessions to avoid spawning too many windows
-        sem = asyncio.Semaphore(2)
-        async def limited(c):
-            async with sem:
-                return await self._fetch_one(c)
-        tasks = [limited(c) for c in self.countries]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # Run countries ONE at a time — Cloudflare solving is heavy
+        # and parallel browser sessions cause resource contention + "Not Responding"
+        for country in self.countries:
+            try:
+                await self._fetch_one(country)
+            except Exception as e:
+                self.country_error.emit(country, str(e))
 
     async def _fetch_one(self, country: str):
         try:
