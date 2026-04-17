@@ -1,0 +1,90 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag_exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from core/__init__.py
+        id: ver
+        run: |
+          VERSION=$(python -c "
+          import re, pathlib
+          text = pathlib.Path('core/__init__.py').read_text()
+          m = re.search(r'__version__\s*=\s*[\"'\''](.*?)[\"'\'']', text)
+          print(m.group(1))
+          ")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.ver.outputs.version }} already exists — skipping release"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.ver.outputs.version }} does not exist — will build & release"
+          fi
+
+  build-and-release:
+    needs: check-version
+    if: needs.check-version.outputs.tag_exists == 'false'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Write .github_token
+        run: |
+          echo "${{ secrets.UPDATER_TOKEN }}" > .github_token
+        shell: bash
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller arablocal.spec --noconfirm
+
+      - name: Copy .github_token to dist
+        run: Copy-Item ".github_token" "dist\ArabLocal\.github_token" -Force
+
+      - name: Create release zip
+        run: Compress-Archive -Path "dist\ArabLocal\*" -DestinationPath "dist\ArabLocal-v${{ needs.check-version.outputs.version }}-win64.zip"
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ needs.check-version.outputs.version }}"
+          git push origin "v${{ needs.check-version.outputs.version }}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ver = "${{ needs.check-version.outputs.version }}"
+          gh release create "v$ver" "dist/ArabLocal-v$ver-win64.zip" `
+            --title "v$ver" `
+            --generate-notes `
+            --target main
