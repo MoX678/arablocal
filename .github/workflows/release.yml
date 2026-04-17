@@ -19,14 +19,15 @@ jobs:
       - name: Extract version from core/__init__.py
         id: ver
         run: |
-          VERSION=$(python -c "
           import re, pathlib
           text = pathlib.Path('core/__init__.py').read_text()
-          m = re.search(r'__version__\s*=\s*[\"'\''](.*?)[\"'\'']', text)
-          print(m.group(1))
-          ")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Detected version: $VERSION"
+          m = re.search(r'__version__\s*=\s*"(.*?)"', text)
+          ver = m.group(1)
+          print(f"Detected version: {ver}")
+          import os
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={ver}\n")
+        shell: python
 
       - name: Check if tag already exists
         id: check
