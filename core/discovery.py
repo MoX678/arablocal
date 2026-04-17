@@ -21,26 +21,35 @@ console = Console(quiet=True)
 
 # ─── Direct fetch helper (no proxy) for discovery fallback ───────────────────
 
-async def _direct_fetch(url: str):
+async def _direct_fetch(url: str, headful: bool = False):
     """Fetch a page directly (no proxy) using a throwaway stealth session.
 
     Always attempts Cloudflare solving — this is a fallback used when the
     primary session got a blocked/empty page.
+    In headful mode, resource blocking is disabled to avoid interfering with
+    Cloudflare Turnstile rendering.
     """
     from scrapling.fetchers import AsyncStealthySession
 
-    session = AsyncStealthySession(
-        headless=True,
-        disable_resources=True,
-        block_ads=True,
-        timeout=30000,
+    mode_str = "headful" if headful else "headless"
+    log.info(f"[L0] Direct fallback fetch ({mode_str}): {url}")
+
+    session_kwargs = dict(
+        headless=not headful,
+        timeout=45000 if headful else 30000,
     )
+    # Only block resources in headless mode — Turnstile needs full resources
+    if not headful:
+        session_kwargs["disable_resources"] = True
+        session_kwargs["block_ads"] = True
+
+    session = AsyncStealthySession(**session_kwargs)
     try:
         await session.start()
         page = await session.fetch(url=url, solve_cloudflare=True)
         return page
     except Exception as e:
-        log.warning(f"[L0] Direct fallback fetch failed: {e}")
+        log.warning(f"[L0] Direct fallback fetch failed ({mode_str}): {e}")
         return None
     finally:
         try:
@@ -56,7 +65,10 @@ async def discover_categories(engine: "ArabLocalEngine") -> List[dict]:
 
     For Kuwait, delegates to discover_categories_kuwait().
     On proxy failure, retries with direct connection.
+    If headless Cloudflare solving fails, switches to headful mode.
     """
+    from core.engine import ArabLocalEngine
+
     if engine.job.is_kuwait:
         return await discover_categories_kuwait(engine)
 
@@ -77,13 +89,32 @@ async def discover_categories(engine: "ArabLocalEngine") -> List[dict]:
     all_hrefs = page.css("a[href*='/business/category/']::attr(href)").getall()
     log.info(f"[L0] Found {len(all_hrefs)} raw category hrefs")
 
-    # Page loaded but no categories (captcha/Cloudflare/block) — retry direct with CF solving
-    if not all_hrefs:
+    # Quick CF detection: if page is a CF challenge, skip headless retry and go straight to headful
+    if not all_hrefs and ArabLocalEngine.is_cf_challenge(page):
+        log.warning("[L0] Cloudflare challenge detected — skipping headless, trying headful mode")
+        page3 = await _direct_fetch(url, headful=True)
+        if page3:
+            all_hrefs = page3.css("a[href*='/business/category/']::attr(href)").getall()
+            log.info(f"[L0] Headful fetch found {len(all_hrefs)} category hrefs")
+            if all_hrefs:
+                engine.set_headful_mode()
+    elif not all_hrefs:
+        # Page loaded but not a CF challenge — retry direct with CF solving
         log.warning("[L0] Page loaded but 0 categories found — retrying direct with CF solving")
         page2 = await _direct_fetch(url)
         if page2:
             all_hrefs = page2.css("a[href*='/business/category/']::attr(href)").getall()
             log.info(f"[L0] Direct retry found {len(all_hrefs)} category hrefs")
+
+        # Still nothing — try headful as last resort
+        if not all_hrefs:
+            log.warning("[L0] All headless attempts failed — trying headful mode")
+            page3 = await _direct_fetch(url, headful=True)
+            if page3:
+                all_hrefs = page3.css("a[href*='/business/category/']::attr(href)").getall()
+                log.info(f"[L0] Headful fetch found {len(all_hrefs)} category hrefs")
+                if all_hrefs:
+                    engine.set_headful_mode()
 
     for href in all_hrefs:
         if not href:
@@ -111,6 +142,8 @@ async def discover_categories(engine: "ArabLocalEngine") -> List[dict]:
 
 async def discover_categories_kuwait(engine: "ArabLocalEngine") -> List[dict]:
     """Kuwait: categories at /business/categories with /business/categories/SLUG links."""
+    from core.engine import ArabLocalEngine
+
     url = f"{engine.job.base_url}/business/categories"
     log.info(f"[L0-KW] Discovering categories from {url}")
 
@@ -128,13 +161,30 @@ async def discover_categories_kuwait(engine: "ArabLocalEngine") -> List[dict]:
     all_hrefs = page.css("a[href*='/business/categories/']::attr(href)").getall()
     log.info(f"[L0-KW] Found {len(all_hrefs)} raw category hrefs")
 
-    # Page loaded but no categories (captcha/Cloudflare/block) — retry direct with CF solving
-    if not all_hrefs:
+    # Quick CF detection
+    if not all_hrefs and ArabLocalEngine.is_cf_challenge(page):
+        log.warning("[L0-KW] Cloudflare challenge detected — trying headful mode")
+        page3 = await _direct_fetch(url, headful=True)
+        if page3:
+            all_hrefs = page3.css("a[href*='/business/categories/']::attr(href)").getall()
+            log.info(f"[L0-KW] Headful fetch found {len(all_hrefs)} category hrefs")
+            if all_hrefs:
+                engine.set_headful_mode()
+    elif not all_hrefs:
         log.warning("[L0-KW] Page loaded but 0 categories found — retrying direct with CF solving")
         page2 = await _direct_fetch(url)
         if page2:
             all_hrefs = page2.css("a[href*='/business/categories/']::attr(href)").getall()
             log.info(f"[L0-KW] Direct retry found {len(all_hrefs)} category hrefs")
+
+        if not all_hrefs:
+            log.warning("[L0-KW] All headless attempts failed — trying headful mode")
+            page3 = await _direct_fetch(url, headful=True)
+            if page3:
+                all_hrefs = page3.css("a[href*='/business/categories/']::attr(href)").getall()
+                log.info(f"[L0-KW] Headful fetch found {len(all_hrefs)} category hrefs")
+                if all_hrefs:
+                    engine.set_headful_mode()
 
     for href in all_hrefs:
         if not href:

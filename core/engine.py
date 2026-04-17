@@ -31,6 +31,10 @@ from core.storage import StorageManager
 log = logging.getLogger("arablocal")
 console = Console(quiet=True)
 
+# Countries where headful mode is required (Cloudflare Turnstile detected).
+# Populated at runtime; survives across engine instances within the same process.
+_headful_countries: set = set()
+
 
 class ArabLocalEngine:
     """Core scraper engine: stealth browser, fetch logic, pipeline orchestration.
@@ -48,6 +52,10 @@ class ArabLocalEngine:
 
         # Stealth browser session (pooled — one browser, many pages)
         self._session: Optional[AsyncStealthySession] = None
+        self._session_is_headful: bool = False
+
+        # Headful mode: required when Cloudflare Turnstile blocks headless browsers
+        self._headful_mode: bool = job.country_key in _headful_countries
 
         # Proxy pool
         self.proxy_pool: List[str] = list(proxies) if proxies else []
@@ -110,7 +118,15 @@ class ArabLocalEngine:
         """Lazily start the stealth browser session (one browser, page pool).
 
         If the browser executable is missing, attempts a one-time auto-install.
+        Restarts the session if headful mode was enabled after session creation.
         """
+        # If headful mode was enabled after session was created, restart
+        if (self._session is not None
+                and self._headful_mode
+                and not self._session_is_headful):
+            log.info("[session] Closing headless session — headful mode now required")
+            await self._close_session()
+
         if self._session is None:
             # Silence scrapling's internal "Fetched (200)" logs
             _scrapling_log = logging.getLogger("scrapling")
@@ -123,13 +139,15 @@ class ArabLocalEngine:
                 "cdn.ampproject.org", "pagead2.googlesyndication.com",
             }
             session_kwargs = dict(
-                headless=True,
-                disable_resources=True,
-                block_ads=True,
-                blocked_domains=blocked,
-                timeout=30000,
+                headless=not self._headful_mode,
+                timeout=45000 if self._headful_mode else 30000,
                 max_pages=self.concurrency,
             )
+            # In headful mode, don't block resources — Turnstile needs them
+            if not self._headful_mode:
+                session_kwargs["disable_resources"] = True
+                session_kwargs["block_ads"] = True
+                session_kwargs["blocked_domains"] = blocked
             if self.proxy_pool:
                 session_kwargs["proxy_rotator"] = ProxyRotator(self.proxy_pool)
                 session_kwargs["timeout"] = 40000
@@ -159,6 +177,7 @@ class ArabLocalEngine:
                     raise
 
             log.info("[session] Stealth browser session started (page pool)")
+            self._session_is_headful = self._headful_mode
 
     async def _close_session(self):
         """Close the browser session."""
@@ -170,10 +189,45 @@ class ArabLocalEngine:
             self._session = None
             log.info("[session] Browser session closed")
 
+    def set_headful_mode(self):
+        """Enable headful mode for this engine and remember it for future instances."""
+        if not self._headful_mode:
+            self._headful_mode = True
+            _headful_countries.add(self.job.country_key)
+            log.info(
+                f"[session] Headful mode enabled for {self.job.country_key} "
+                "(Cloudflare Turnstile detected)"
+            )
+
+    async def _restart_as_headful(self):
+        """Close the current session and restart in headful mode."""
+        self.set_headful_mode()
+        await self._close_session()
+        await self._ensure_session()
+
+    @staticmethod
+    def is_cf_challenge(page) -> bool:
+        """Check if a fetched page is a Cloudflare challenge (not real content)."""
+        if page is None:
+            return False
+        title = page.css("title::text").get("") or ""
+        if "just a moment" in title.lower():
+            return True
+        # Also detect by checking for turnstile iframe
+        if page.css("iframe[src*='challenges.cloudflare.com']"):
+            return True
+        return False
+
     # ─── Fetcher ─────────────────────────────────────────────────────────
 
     async def fetch(self, url: str, retries: int = 2, page_action=None):
-        """Fetch a page with pooled stealth browser, retry with linear backoff."""
+        """Fetch a page with pooled stealth browser, retry with linear backoff.
+
+        In headless mode, Cloudflare solving is skipped (it can't solve Turnstile
+        "managed" challenges). The caller (e.g. discovery) is responsible for
+        detecting CF pages and falling back to headful mode.
+        In headful mode, CF solving is enabled and works automatically.
+        """
         if self.shutdown_event.is_set():
             return None
         async with self.semaphore:
@@ -184,13 +238,16 @@ class ArabLocalEngine:
                 if self.shutdown_event.is_set():
                     return None
                 try:
-                    fetch_kwargs = dict(
-                        url=url,
-                    )
-                    if self.job.needs_cloudflare:
+                    fetch_kwargs = dict(url=url)
+
+                    # Only use solve_cloudflare in headful mode — headless CF
+                    # solving loops forever on Turnstile "managed" challenges.
+                    if self.job.needs_cloudflare and self._headful_mode:
                         fetch_kwargs["solve_cloudflare"] = True
+
                     if page_action is not None:
                         fetch_kwargs["page_action"] = page_action
+
                     page = await self._session.fetch(**fetch_kwargs)
                     await self.delay.on_success()
                     return page
