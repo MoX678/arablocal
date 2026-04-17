@@ -29,15 +29,16 @@ jobs:
               f.write(f"version={ver}\n")
         shell: python
 
-      - name: Check if tag already exists
+      - name: Check if tag already exists on remote
         id: check
         run: |
-          if git rev-parse "v${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+          TAG="v${{ steps.ver.outputs.version }}"
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag v${{ steps.ver.outputs.version }} already exists — skipping release"
+            echo "Tag $TAG already exists — skipping release"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Tag v${{ steps.ver.outputs.version }} does not exist — will build & release"
+            echo "Tag $TAG does not exist — will build & release"
           fi
 
   build-and-release:
