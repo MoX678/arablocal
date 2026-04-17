@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from core.config import BASE_URLS, COUNTRY_INFO, JobConfig, resolve_concurrency
+from core.cookie_manager import get_cookie_manager
 from core.discovery import discover_categories
 from core.engine import ArabLocalEngine
 
@@ -162,7 +163,21 @@ class MultiCategoryFetchWorker(QThread):
             )
             job.ensure_dirs()
             self.discovery_log.emit(country, "INFO", f"Connecting to {job.base_url}/business ...")
-            engine = ArabLocalEngine(job=job, concurrency=2)
+
+            # Use CookieManager for CF solving
+            cookie_mgr = get_cookie_manager()
+            cookies = cookie_mgr.get_cookies(country)
+
+            if not cookies:
+                # Check if CF is present and solve if needed
+                needs_cf = await cookie_mgr.probe_cf(job.base_url)
+                if needs_cf:
+                    self.discovery_log.emit(country, "INFO", "Cloudflare detected — solving...")
+                    cookies = await cookie_mgr.solve_for_domain(country, job.base_url)
+                    if cookies:
+                        self.discovery_log.emit(country, "SUCCESS", "Cloudflare solved")
+
+            engine = ArabLocalEngine(job=job, concurrency=2, cookies=cookies)
             try:
                 cats = await discover_categories(engine)
                 if cats:
@@ -263,6 +278,7 @@ class ScrapeWorker(QThread):
     """Run scrape pipelines for multiple countries in parallel.
 
     Emits granular signals for real-time GUI updates.
+    Handles CF cookie solving before scraping.
     """
 
     # Signals
@@ -277,6 +293,11 @@ class ScrapeWorker(QThread):
     job_error = pyqtSignal(str, str)                   # country_key, error_msg
     checkpoint_info = pyqtSignal(str, int, int)        # country_key, completed_cats, total_cats
     pipeline_finished = pyqtSignal()
+    # New signals for cookie transfer + unified flow
+    cf_status = pyqtSignal(str, str)                   # country_key, status_message
+    categories_found = pyqtSignal(str, list)           # country_key, [{name, slug, url}, ...]
+    cookie_status = pyqtSignal(str, str)               # country_key, "alive"/"expired"/"none"
+    phase_changed = pyqtSignal(str, str)               # country_key, "cf_solve"/"discovery"/"scraping"
 
     def __init__(self, jobs: List[JobConfig], proxies: List[str] = None, parent=None):
         super().__init__(parent)
@@ -326,7 +347,23 @@ class ScrapeWorker(QThread):
             self.pipeline_finished.emit()
 
     async def _run_all(self):
-        """Run all country jobs in parallel."""
+        """Solve CF for all domains first, then run country jobs in parallel."""
+        cookie_mgr = get_cookie_manager()
+
+        # Set up status callback to emit cf_status signal
+        def _cf_cb(country, msg):
+            self.cf_status.emit(country, msg)
+        cookie_mgr.set_status_callback(_cf_cb)
+
+        # Phase 1: Solve CF for all unique domains (sequential, lock-protected)
+        await cookie_mgr.solve_all(self.jobs, self.proxies or None)
+
+        # Emit cookie status for each country
+        for job in self.jobs:
+            status = cookie_mgr.cookie_status(job.country_key)
+            self.cookie_status.emit(job.country_key, status)
+
+        # Phase 2: Run pipelines
         if len(self.jobs) == 1:
             await self._run_single(self.jobs[0])
         else:
@@ -337,7 +374,7 @@ class ScrapeWorker(QThread):
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _run_single(self, job: JobConfig):
-        """Run one country's pipeline with signal hooks."""
+        """Run one country's pipeline with cookie injection and signal hooks."""
         key = job.country_key
 
         if self._cancel_requested:
@@ -346,13 +383,42 @@ class ScrapeWorker(QThread):
         self.job_started.emit(key)
         self.log_message.emit(key, "INFO", f"Starting {key.upper()} pipeline...")
 
-        engine = ArabLocalEngine(job=job, concurrency=job.concurrency, proxies=self.proxies)
+        # Get pre-solved cookies from CookieManager
+        cookie_mgr = get_cookie_manager()
+        cookies = cookie_mgr.get_cookies(key)
+
+        engine = ArabLocalEngine(
+            job=job, concurrency=job.concurrency,
+            proxies=self.proxies, cookies=cookies,
+        )
         self._engines[key] = engine
+
+        # Set up mid-scrape CF refresh callback
+        async def _on_cf_mid_scrape(eng):
+            self.cf_status.emit(key, "Cookie expired — refreshing...")
+            self.cookie_status.emit(key, "expired")
+            new_cookies = await cookie_mgr.refresh(key, job.base_url, self.proxies or None)
+            if new_cookies:
+                await eng.reinject_cookies(new_cookies)
+                self.cf_status.emit(key, "Cookies refreshed")
+                self.cookie_status.emit(key, "alive")
+                return True
+            self.cf_status.emit(key, "Cookie refresh failed")
+            return False
+        engine.on_cf_detected_callback = _on_cf_mid_scrape
 
         # Hook category progress callback
         def _cat_progress_cb(cat_name, page_num, total_pages, new_urls, _key=key):
             self.category_progress.emit(_key, cat_name, page_num, total_pages, new_urls)
         engine.category_progress_callback = _cat_progress_cb
+
+        # Hook categories discovered callback — stream to UI
+        def _cats_discovered_cb(cats, _key=key):
+            self.categories_found.emit(_key, cats)
+            self.phase_changed.emit(_key, "scraping")
+        engine.categories_discovered_callback = _cats_discovered_cb
+
+        self.phase_changed.emit(key, "discovery")
 
         # Hook into scrape_business to emit signals
         orig_scrape = engine.scrape_business

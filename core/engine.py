@@ -44,7 +44,8 @@ class ArabLocalEngine:
     """
 
     def __init__(self, job: JobConfig, concurrency: int,
-                 proxies: Optional[List[str]] = None):
+                 proxies: Optional[List[str]] = None,
+                 cookies: Optional[List[dict]] = None):
         self.job = job
         self.concurrency = concurrency
         self.semaphore = asyncio.Semaphore(concurrency)
@@ -54,8 +55,15 @@ class ArabLocalEngine:
         self._session: Optional[AsyncStealthySession] = None
         self._session_is_headful: bool = False
 
+        # Pre-solved cookies from CookieManager (injected after session start)
+        self._cookies: Optional[List[dict]] = cookies
+        self._cookies_injected: bool = False
+
         # Headful mode: required when Cloudflare Turnstile blocks headless browsers
-        self._headful_mode: bool = job.country_key in _headful_countries
+        # If cookies are provided, start headless (cookies bypass CF)
+        self._headful_mode: bool = (
+            job.country_key in _headful_countries and not cookies
+        )
 
         # Proxy pool
         self.proxy_pool: List[str] = list(proxies) if proxies else []
@@ -72,6 +80,14 @@ class ArabLocalEngine:
 
         # Category progress callback: (cat_name, page_num, total_pages, new_urls)
         self.category_progress_callback = None
+
+        # CF detection callback: called when fetch() detects a CF challenge mid-scrape
+        # Signature: async callback(engine) → bool (True if cookies refreshed)
+        self.on_cf_detected_callback = None
+
+        # Categories discovered callback: called after L0 discovery completes
+        # Signature: callback(categories: list[dict])
+        self.categories_discovered_callback = None
 
         # Rich progress (set during pipeline)
         self.progress: Optional[Progress] = None
@@ -179,6 +195,18 @@ class ArabLocalEngine:
             log.info("[session] Stealth browser session started (page pool)")
             self._session_is_headful = self._headful_mode
 
+            # Inject pre-solved cookies into the session context
+            if self._cookies and not self._cookies_injected:
+                try:
+                    await self._session.context.add_cookies(self._cookies)
+                    self._cookies_injected = True
+                    log.info(
+                        f"[session] Injected {len(self._cookies)} cookies "
+                        f"for {self.job.country_key}"
+                    )
+                except Exception as e:
+                    log.warning(f"[session] Cookie injection failed: {e}")
+
     async def _close_session(self):
         """Close the browser session."""
         if self._session:
@@ -205,6 +233,18 @@ class ArabLocalEngine:
         await self._close_session()
         await self._ensure_session()
 
+    async def reinject_cookies(self, cookies: List[dict]):
+        """Re-inject fresh cookies into the existing session (mid-scrape refresh)."""
+        self._cookies = cookies
+        self._cookies_injected = False
+        if self._session:
+            try:
+                await self._session.context.add_cookies(cookies)
+                self._cookies_injected = True
+                log.info(f"[session] Re-injected {len(cookies)} cookies for {self.job.country_key}")
+            except Exception as e:
+                log.warning(f"[session] Cookie re-injection failed: {e}")
+
     @staticmethod
     def is_cf_challenge(page) -> bool:
         """Check if a fetched page is a Cloudflare challenge (not real content)."""
@@ -223,9 +263,8 @@ class ArabLocalEngine:
     async def fetch(self, url: str, retries: int = 2, page_action=None):
         """Fetch a page with pooled stealth browser, retry with linear backoff.
 
-        In headless mode, Cloudflare solving is skipped (it can't solve Turnstile
-        "managed" challenges). The caller (e.g. discovery) is responsible for
-        detecting CF pages and falling back to headful mode.
+        In headless mode with cookies, CF is bypassed. If CF is detected mid-scrape
+        (cookie expired), calls on_cf_detected_callback to refresh cookies and retries.
         In headful mode, CF solving is enabled and works automatically.
         """
         if self.shutdown_event.is_set():
@@ -249,6 +288,25 @@ class ArabLocalEngine:
                         fetch_kwargs["page_action"] = page_action
 
                     page = await self._session.fetch(**fetch_kwargs)
+
+                    # Mid-scrape CF detection: cookie may have expired
+                    if (page and self.is_cf_challenge(page)
+                            and self._cookies
+                            and self.on_cf_detected_callback):
+                        log.warning(
+                            f"[fetch] CF challenge detected for {url} — "
+                            "cookies may have expired, requesting refresh..."
+                        )
+                        refreshed = await self.on_cf_detected_callback(self)
+                        if refreshed:
+                            # Re-inject cookies and retry this fetch
+                            self._cookies_injected = False
+                            await self._ensure_session()
+                            page = await self._session.fetch(**fetch_kwargs)
+                            if page and not self.is_cf_challenge(page):
+                                await self.delay.on_success()
+                                return page
+
                     await self.delay.on_success()
                     return page
                 except Exception as e:
@@ -327,6 +385,10 @@ class ArabLocalEngine:
             log.error(f"[{self.job.country_key}] No categories discovered. Exiting.")
             console.print(f"[red][{self.job.country_key}] No categories discovered. Exiting.[/red]")
             return
+
+        # Notify callback with discovered categories
+        if self.categories_discovered_callback:
+            self.categories_discovered_callback(categories)
 
         # Filter by category if specified
         if category_filter:

@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.config import COUNTRY_INFO, BASE_URLS, JobConfig, resolve_concurrency
+from core.cookie_manager import get_cookie_manager
 from gui.workers import ScrapeWorker, ScrapeStats, MultiCategoryFetchWorker, QtLogHandler
 
 
@@ -354,13 +355,14 @@ class ScrapePage(QWidget):
 
         left_layout.addLayout(country_row)
 
-        # Fetch categories button
+        # Fetch categories button (optional preview)
         cat_action_row = QHBoxLayout()
         cat_action_row.setSpacing(4)
 
-        self.btn_fetch_cats = QPushButton("Discover Categories")
+        self.btn_fetch_cats = QPushButton("Preview Categories")
         self.btn_fetch_cats.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_fetch_cats.setEnabled(False)
+        self.btn_fetch_cats.setToolTip("Optional: preview available categories before scraping")
         self.btn_fetch_cats.clicked.connect(self._fetch_categories)
         cat_action_row.addWidget(self.btn_fetch_cats, stretch=1)
 
@@ -396,13 +398,38 @@ class ScrapePage(QWidget):
         self.cat_layout.setContentsMargins(8, 6, 8, 6)
         self.cat_layout.setSpacing(2)
 
-        self.cat_placeholder = QLabel("Select countries and discover categories")
+        self.cat_placeholder = QLabel("Categories auto-discovered on Start (or preview first)")
         self.cat_placeholder.setStyleSheet("color: #56565e; font-size: 11px; padding: 8px;")
         self.cat_layout.addWidget(self.cat_placeholder)
         self.cat_layout.addStretch()
 
         self.cat_scroll.setWidget(self.cat_container)
         left_layout.addWidget(self.cat_scroll)
+
+        # ── Cookie Status Indicator ──────────────────────────────────
+        cookie_row = QHBoxLayout()
+        cookie_row.setSpacing(6)
+
+        cookie_lbl = QLabel("CF COOKIES")
+        cookie_lbl.setStyleSheet(
+            "font-size: 9px; font-weight: 600; color: #56565e; letter-spacing: 0.5px;"
+        )
+        cookie_row.addWidget(cookie_lbl)
+
+        self.cookie_status_label = QLabel("Not solved")
+        self.cookie_status_label.setStyleSheet(
+            "font-size: 10px; color: #56565e; "
+            "font-family: 'Cascadia Code', 'Consolas', monospace;"
+        )
+        cookie_row.addWidget(self.cookie_status_label)
+
+        self.cookie_dot = QLabel("●")
+        self.cookie_dot.setStyleSheet("font-size: 10px; color: #56565e;")
+        self.cookie_dot.setFixedWidth(14)
+        cookie_row.addWidget(self.cookie_dot)
+        cookie_row.addStretch()
+
+        left_layout.addLayout(cookie_row)
 
         # ── Job Configuration ────────────────────────────────────────
         section_config = QLabel("CONFIGURATION")
@@ -513,10 +540,11 @@ class ScrapePage(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
 
-        self.btn_start = QPushButton("▶  Start")
+        self.btn_start = QPushButton("▶  Start Scraping")
         self.btn_start.setProperty("class", "primary")
         self.btn_start.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_start.setMinimumHeight(36)
+        self.btn_start.setToolTip("Start: auto-solves CF, discovers categories, then scrapes")
         self.btn_start.clicked.connect(self._start_scrape)
         btn_row.addWidget(self.btn_start, 1)
 
@@ -899,7 +927,9 @@ class ScrapePage(QWidget):
             return []
 
         selected_cats = self._get_selected_categories()
-        all_cats_checked = len(selected_cats) == len(self._category_checkboxes)
+        # If no categories were previewed, pass empty = all categories
+        no_preview = len(self._category_checkboxes) == 0
+        all_cats_checked = no_preview or len(selected_cats) == len(self._category_checkboxes)
 
         threads_text = self.threads_combo.currentText()
         num_jobs = len(countries)
@@ -962,6 +992,7 @@ class ScrapePage(QWidget):
         proxies = self._get_proxies()
         self._is_running = True
         self.btn_stop.setEnabled(True)
+        self.btn_fetch_cats.setEnabled(False)
         self._update_button_styles()
 
         # Show monitor panel and start dashboard timer
@@ -1002,6 +1033,11 @@ class ScrapePage(QWidget):
         worker.checkpoint_info.connect(self._on_checkpoint_info)
         worker.category_progress.connect(self._on_category_progress)
         worker.pipeline_finished.connect(lambda w=worker: self._on_pipeline_finished(w))
+        # New signals
+        worker.cf_status.connect(self._on_cf_status)
+        worker.categories_found.connect(self._on_categories_streamed)
+        worker.cookie_status.connect(self._on_cookie_status)
+        worker.phase_changed.connect(self._on_phase_changed)
         self._workers.append(worker)
 
         # Verbose mode: attach Python logging → GUI log panel (once)
@@ -1104,6 +1140,62 @@ class ScrapePage(QWidget):
                 cat_name, page_num, total_pages, new_urls
             )
 
+    def _on_cf_status(self, country: str, status: str):
+        """Handle CF solving status updates from the worker."""
+        self._log(f"[{country.upper()}] {status}", "#60a5fa")
+        if country in self._country_progress:
+            self._country_progress[country].lbl_status.setText(status[:50])
+            self._country_progress[country].lbl_status.setStyleSheet(
+                "font-size: 11px; color: #60a5fa;"
+            )
+
+    def _on_cookie_status(self, country: str, status: str):
+        """Update cookie status indicator in the UI."""
+        if status == "alive":
+            self.cookie_dot.setStyleSheet("font-size: 10px; color: #34d399;")
+            self.cookie_status_label.setText("Active")
+            self.cookie_status_label.setStyleSheet(
+                "font-size: 10px; color: #34d399; "
+                "font-family: 'Cascadia Code', 'Consolas', monospace;"
+            )
+        elif status == "expired":
+            self.cookie_dot.setStyleSheet("font-size: 10px; color: #eab308;")
+            self.cookie_status_label.setText("Expired")
+            self.cookie_status_label.setStyleSheet(
+                "font-size: 10px; color: #eab308; "
+                "font-family: 'Cascadia Code', 'Consolas', monospace;"
+            )
+        else:
+            self.cookie_dot.setStyleSheet("font-size: 10px; color: #56565e;")
+            self.cookie_status_label.setText("Not needed")
+            self.cookie_status_label.setStyleSheet(
+                "font-size: 10px; color: #56565e; "
+                "font-family: 'Cascadia Code', 'Consolas', monospace;"
+            )
+
+    def _on_categories_streamed(self, country: str, cats: list):
+        """Auto-populate category preview when Start discovers categories."""
+        self._categories_cache[country] = cats
+        self._rebuild_category_checkboxes()
+        total = sum(len(self._categories_cache.get(c, [])) for c in self._get_selected_countries())
+        self.cat_fetch_status.setText(f"{total} categories discovered")
+        self.cat_fetch_status.setStyleSheet("font-size: 11px; color: #34d399;")
+
+    def _on_phase_changed(self, country: str, phase: str):
+        """Handle pipeline phase transitions."""
+        phase_labels = {
+            "cf_solve": "Solving CF...",
+            "discovery": "Discovering...",
+            "scraping": "Scraping...",
+        }
+        label = phase_labels.get(phase, phase)
+        if country in self._country_progress:
+            self._country_progress[country].lbl_status.setText(label)
+            color = "#60a5fa" if phase != "scraping" else "#eab308"
+            self._country_progress[country].lbl_status.setStyleSheet(
+                f"font-size: 11px; color: {color};"
+            )
+
     def _on_pipeline_finished(self, finished_worker=None):
         # Remove finished worker from list
         if finished_worker and finished_worker in self._workers:
@@ -1118,9 +1210,10 @@ class ScrapePage(QWidget):
         # All done
         self._is_running = False
         self._running_countries.clear()
-        self.btn_start.setText("▶  Start")
+        self.btn_start.setText("▶  Start Scraping")
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
+        self.btn_fetch_cats.setEnabled(len(self._get_selected_countries()) > 0)
         self._update_button_styles()
         self._dashboard_timer.stop()
         self._log("All pipelines finished.", "#34d399")
