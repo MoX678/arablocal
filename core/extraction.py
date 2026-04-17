@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
+import unicodedata
 from typing import Dict
 from urllib.parse import urlparse
 
@@ -10,6 +12,35 @@ from core.config import (
     SOCIAL_DOMAINS, SITE_SOCIAL_BLACKLIST,
     IGNORE_FOR_WEBSITE,
 )
+
+
+# ─── Arabic normalisation helpers for fingerprinting ──────────────────────
+
+_TASHKEEL = re.compile(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC"
+                        r"\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]")
+_ALEF_VARIANTS = re.compile(r"[\u0622\u0623\u0625\u0671]")  # آ أ إ ٱ → ا
+
+
+def _normalize_arabic(text: str) -> str:
+    """Strip tashkeel, normalise alef forms, collapse whitespace."""
+    text = _TASHKEEL.sub("", text)
+    text = _ALEF_VARIANTS.sub("\u0627", text)  # → ا
+    text = unicodedata.normalize("NFKC", text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def compute_fingerprint(data: Dict[str, str], country: str) -> str:
+    """Compute a 16-char hex fingerprint for deduplication.
+
+    Uses SHA-256 of normalised (name | phone | country). Returns "" if
+    both name and phone are empty (no meaningful identity).
+    """
+    name = _normalize_arabic(data.get("Name", ""))
+    phone = re.sub(r"[^\d+]", "", data.get("Phone_1", ""))
+    if not name and not phone:
+        return ""
+    raw = f"{name}|{phone}|{country.lower()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def extract_data(page, url: str, phone_prefix: str, country_name: str) -> Dict[str, str]:

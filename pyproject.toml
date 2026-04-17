@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arablocal-scraper"
-version = "3.1.0"
+version = "4.0.0"
 description = "Multi-country business listing scraper for ArabLocal.com"
 requires-python = ">=3.10"
 dependencies = [
     "scrapling[fetchers]>=0.10,<1.0",
     "PyQt6>=6.6,<7.0",
     "rich>=13.0,<14.0",
+    "openpyxl>=3.1,<4.0",
 ]
 
 [project.scripts]

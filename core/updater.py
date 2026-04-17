@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re as _re
 import shutil
 import subprocess
 import sys
@@ -23,14 +24,72 @@ ASSET_PATTERN = "ArabLocal-v{version}-win64.zip"
 # This token can ONLY read releases. It cannot push, delete, or modify anything.
 _GITHUB_TOKEN: Optional[str] = None
 
+# ─── DPAPI encryption helpers (Windows only) ─────────────────────────────
+
+_DPAPI_TOKEN_DIR = os.path.join(os.environ.get("APPDATA", ""), "ArabLocal")
+_DPAPI_TOKEN_FILE = os.path.join(_DPAPI_TOKEN_DIR, "github_token.dat")
+
+
+def _dpapi_encrypt(plaintext: str) -> Optional[bytes]:
+    """Encrypt a string with Windows DPAPI. Returns ciphertext bytes or None."""
+    try:
+        import win32crypt  # type: ignore
+        return win32crypt.CryptProtectData(
+            plaintext.encode("utf-8"), "ArabLocal-Token",
+            None, None, None, 0
+        )
+    except Exception:
+        return None
+
+
+def _dpapi_decrypt(ciphertext: bytes) -> Optional[str]:
+    """Decrypt DPAPI ciphertext. Returns plaintext or None."""
+    try:
+        import win32crypt  # type: ignore
+        _, data = win32crypt.CryptUnprotectData(ciphertext, None, None, None, 0)
+        return data.decode("utf-8")
+    except Exception:
+        return None
+
+
+def _load_dpapi_token() -> Optional[str]:
+    """Try loading the DPAPI-encrypted token from %APPDATA%."""
+    try:
+        if os.path.isfile(_DPAPI_TOKEN_FILE):
+            with open(_DPAPI_TOKEN_FILE, "rb") as f:
+                ciphertext = f.read()
+            if ciphertext:
+                return _dpapi_decrypt(ciphertext)
+    except Exception:
+        pass
+    return None
+
+
+def _save_dpapi_token(token: str) -> bool:
+    """Encrypt and save token via DPAPI. Returns True on success."""
+    try:
+        ciphertext = _dpapi_encrypt(token)
+        if ciphertext is None:
+            return False
+        os.makedirs(_DPAPI_TOKEN_DIR, exist_ok=True)
+        with open(_DPAPI_TOKEN_FILE, "wb") as f:
+            f.write(ciphertext)
+        return True
+    except Exception:
+        return False
+
 
 def _get_github_token() -> Optional[str]:
     """Load the GitHub token (read-only PAT for release checks).
 
     Checks in order:
-    1. Module-level _GITHUB_TOKEN
+    1. Module-level _GITHUB_TOKEN (cached)
     2. ARABLOCAL_GITHUB_TOKEN env var
-    3. .github_token file next to the executable
+    3. DPAPI-encrypted token in %APPDATA%/ArabLocal/github_token.dat
+    4. .github_token plaintext file next to the executable
+
+    If a plaintext token is found and DPAPI is available, it is automatically
+    migrated to encrypted storage.
     """
     global _GITHUB_TOKEN
     if _GITHUB_TOKEN:
@@ -42,7 +101,13 @@ def _get_github_token() -> Optional[str]:
         _GITHUB_TOKEN = token
         return token
 
-    # File next to exe
+    # DPAPI encrypted store
+    token = _load_dpapi_token()
+    if token:
+        _GITHUB_TOKEN = token
+        return token
+
+    # Plaintext file next to exe
     if getattr(sys, "frozen", False):
         token_path = os.path.join(os.path.dirname(sys.executable), ".github_token")
     else:
@@ -56,6 +121,9 @@ def _get_github_token() -> Optional[str]:
                 token = f.read().strip()
             if token:
                 _GITHUB_TOKEN = token
+                # Auto-migrate to DPAPI if available
+                if _save_dpapi_token(token):
+                    log.info("GitHub token migrated to encrypted storage (DPAPI)")
                 return token
     except Exception:
         pass
@@ -80,17 +148,25 @@ def _parse_version(tag: str) -> tuple[int, ...]:
 
     Strips any pre-release suffix (e.g. '-beta', '-rc1') before parsing.
     """
-    import re as _re
     clean = _re.split(r"[^0-9.]", tag.lstrip("v"), maxsplit=1)[0].rstrip(".")
     if not clean:
         return (0,)
     return tuple(int(x) for x in clean.split(".") if x.isdigit())
 
 
+def _is_prerelease(data: dict) -> bool:
+    """Check if a release is a pre-release (alpha, beta, rc, draft)."""
+    if data.get("prerelease", False) or data.get("draft", False):
+        return True
+    tag = data.get("tag_name", "")
+    return bool(_re.search(r"(alpha|beta|rc|dev|pre)", tag, _re.IGNORECASE))
+
+
 def check_for_update(current_version: str) -> Optional[dict]:
-    """Check GitHub for a newer release.
+    """Check GitHub for a newer stable release.
 
     Returns dict with update info or None if up-to-date.
+    Skips pre-release/draft versions.
     """
     try:
         req = _make_request(GITHUB_API)
@@ -99,6 +175,11 @@ def check_for_update(current_version: str) -> Optional[dict]:
 
         tag = data.get("tag_name", "")
         if not tag:
+            return None
+
+        # Skip pre-releases
+        if _is_prerelease(data):
+            log.debug(f"Skipping pre-release: {tag}")
             return None
 
         remote_ver = _parse_version(tag)
@@ -129,6 +210,19 @@ def check_for_update(current_version: str) -> Optional[dict]:
             "asset_size": asset_size,
             "html_url": data.get("html_url", ""),
         }
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            log.warning("Update check failed: invalid GitHub token (401 Unauthorized)")
+        elif e.code == 403:
+            log.warning("Update check failed: API rate limit or forbidden (403)")
+        elif e.code == 404:
+            log.warning("Update check failed: repository not found (404)")
+        else:
+            log.warning(f"Update check failed: HTTP {e.code}")
+        return None
+    except urllib.error.URLError as e:
+        log.warning(f"Update check failed: network error — {e.reason}")
+        return None
     except Exception as e:
         log.warning(f"Update check failed: {e}")
         return None
@@ -165,13 +259,32 @@ def download_update(url: str, progress_callback=None) -> Optional[str]:
                     if progress_callback:
                         progress_callback(downloaded, total)
 
+        # Validate the zip file
+        if not zipfile.is_zipfile(zip_path):
+            log.error("Downloaded file is not a valid zip archive")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            bad = zf.testzip()
+            if bad:
+                log.error(f"Corrupt file in zip: {bad}")
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                return None
+
         return zip_path
+    except urllib.error.HTTPError as e:
+        log.error(f"Update download failed: HTTP {e.code}")
+        return None
+    except urllib.error.URLError as e:
+        log.error(f"Update download failed: network error — {e.reason}")
+        return None
     except Exception as e:
         log.error(f"Update download failed: {e}")
         return None
 
 
-def apply_update(zip_path: str) -> bool:
+def apply_update(zip_path: str, flush_callback=None) -> bool:
     """Extract update zip and launch updater batch script.
 
     The batch script:
@@ -180,9 +293,19 @@ def apply_update(zip_path: str) -> bool:
     3. Cleans up temp files
     4. Relaunches the app
 
+    Args:
+        zip_path: Path to the downloaded update zip.
+        flush_callback: Optional callable to flush any pending data (e.g., CSV buffers).
+
     Returns True if the updater was launched (caller should exit).
     """
     try:
+        # Flush pending data before applying update
+        if flush_callback:
+            try:
+                flush_callback()
+            except Exception as e:
+                log.warning(f"Pre-update flush failed: {e}")
         # Determine app directory (where the exe lives)
         if getattr(sys, "frozen", False):
             app_dir = os.path.dirname(sys.executable)
@@ -241,7 +364,7 @@ del /q "{zip_path}" 2>NUL
 echo [%date% %time%] Cleanup done >> %LOGFILE%
 (goto) 2>nul & del "%~f0"
 """
-        with open(bat_path, "w", encoding="utf-8") as f:
+        with open(bat_path, "w", encoding="mbcs", errors="replace") as f:
             f.write(bat_content)
 
         # Launch updater (hidden window)

@@ -50,6 +50,7 @@ hidden_imports = [
     "rich.console",
     "rich.progress",
     "apify_fingerprint_datapoints",
+    "openpyxl",
     "sqlite3",
     "asyncio",
     "logging",

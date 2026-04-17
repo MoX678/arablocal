@@ -73,6 +73,8 @@ class ScrapeStats:
     scraped: int = 0
     skipped: int = 0
     errors: int = 0
+    new: int = 0          # First-time URLs
+    updated: int = 0      # Existing URLs refreshed
     elapsed: float = 0.0
     rate: float = 0.0
     current_category: str = ""
@@ -296,6 +298,7 @@ class ScrapeWorker(QThread):
     # New signals for cookie transfer + unified flow
     cf_status = pyqtSignal(str, str)                   # country_key, status_message
     categories_found = pyqtSignal(str, list)           # country_key, [{name, slug, url}, ...]
+    proxy_health = pyqtSignal(str, dict)               # country_key, health_summary
     cookie_status = pyqtSignal(str, str)               # country_key, "alive"/"expired"/"none"
     phase_changed = pyqtSignal(str, str)               # country_key, "cf_solve"/"discovery"/"scraping"
 
@@ -448,10 +451,16 @@ class ScrapeWorker(QThread):
                 scraped=_engine.scraped_count,
                 skipped=_engine.skip_count,
                 errors=_engine.error_count,
+                new=_engine.new_count,
+                updated=_engine.updated_count,
                 elapsed=elapsed,
                 rate=rate,
             )
             self.stats_update.emit(key, stats)
+
+            # Emit proxy health if available
+            if _engine.proxy_health:
+                self.proxy_health.emit(key, _engine.proxy_health.get_summary())
 
         engine.scrape_business = hooked_scrape
 
@@ -480,6 +489,8 @@ class ScrapeWorker(QThread):
                 scraped=engine.scraped_count,
                 skipped=engine.skip_count,
                 errors=engine.error_count,
+                new=engine.new_count,
+                updated=engine.updated_count,
                 elapsed=elapsed,
                 rate=rate,
             )
@@ -489,8 +500,9 @@ class ScrapeWorker(QThread):
                 f"Completed: {engine.scraped_count} businesses in {elapsed:.0f}s"
             )
 
-            # Export sorted CSVs
-            engine.storage.export_sorted_csvs()
+            # Export sorted CSVs + Excel
+            engine.storage.export_sorted_csvs(dedup=True)
+            engine.storage.export_excel(dedup=True)
 
         except Exception as e:
             import traceback

@@ -25,7 +25,8 @@ from scrapling.fetchers import AsyncStealthySession, ProxyRotator
 from core.config import JobConfig, _SENTINEL
 from core.delay import AdaptiveDelay
 from core.discovery import crawl_category_listings, discover_categories
-from core.extraction import extract_data, extract_data_kuwait
+from core.extraction import extract_data, extract_data_kuwait, compute_fingerprint
+from core.proxy_health import ProxyHealthMonitor
 from core.storage import StorageManager
 
 log = logging.getLogger("arablocal")
@@ -67,11 +68,16 @@ class ArabLocalEngine:
 
         # Proxy pool
         self.proxy_pool: List[str] = list(proxies) if proxies else []
+        self.proxy_health: Optional[ProxyHealthMonitor] = (
+            ProxyHealthMonitor(self.proxy_pool) if self.proxy_pool else None
+        )
 
         # Counters & stats
         self.scraped_count = 0
         self.skip_count = 0
         self.error_count = 0
+        self.new_count = 0        # First time seeing this URL
+        self.updated_count = 0    # URL existed, data refreshed
         self.start_time: float = 0.0
         self.delay = AdaptiveDelay()
 
@@ -276,6 +282,7 @@ class ArabLocalEngine:
             for attempt in range(retries):
                 if self.shutdown_event.is_set():
                     return None
+                t0 = time.monotonic()
                 try:
                     fetch_kwargs = dict(url=url)
 
@@ -288,6 +295,7 @@ class ArabLocalEngine:
                         fetch_kwargs["page_action"] = page_action
 
                     page = await self._session.fetch(**fetch_kwargs)
+                    latency = time.monotonic() - t0
 
                     # Mid-scrape CF detection: cookie may have expired
                     if (page and self.is_cf_challenge(page)
@@ -297,6 +305,11 @@ class ArabLocalEngine:
                             f"[fetch] CF challenge detected for {url} — "
                             "cookies may have expired, requesting refresh..."
                         )
+                        # CF challenge is a site fault, not proxy fault
+                        if self.proxy_health and self.proxy_pool:
+                            self.proxy_health.record_failure(
+                                self.proxy_pool[0], "CF challenge", is_site_fault=True
+                            )
                         refreshed = await self.on_cf_detected_callback(self)
                         if refreshed:
                             # Re-inject cookies and retry this fetch
@@ -305,11 +318,25 @@ class ArabLocalEngine:
                             page = await self._session.fetch(**fetch_kwargs)
                             if page and not self.is_cf_challenge(page):
                                 await self.delay.on_success()
+                                if self.proxy_health and self.proxy_pool:
+                                    self.proxy_health.record_success(
+                                        self.proxy_pool[0], time.monotonic() - t0
+                                    )
                                 return page
 
+                    if self.proxy_health and self.proxy_pool:
+                        self.proxy_health.record_success(self.proxy_pool[0], latency)
                     await self.delay.on_success()
                     return page
                 except Exception as e:
+                    latency = time.monotonic() - t0
+                    err_str = str(e)
+                    if self.proxy_health and self.proxy_pool:
+                        # Classify: timeout/connection errors are proxy faults
+                        is_site = any(k in err_str.lower() for k in ("403", "404", "cloudflare"))
+                        self.proxy_health.record_failure(
+                            self.proxy_pool[0], err_str[:80], is_site_fault=is_site
+                        )
                     log.warning(f"[fetch] Attempt {attempt + 1}/{retries} failed for {url}: {e}")
                     await self.delay.on_failure()
                     await asyncio.sleep(1.5 * (attempt + 1) + random.uniform(0, 1))
@@ -340,14 +367,22 @@ class ArabLocalEngine:
             self.skip_count += 1
             return
 
-        # Save to SQLite
-        await self.storage.insert_business(url, category, data)
+        # Compute dedup fingerprint
+        fp = compute_fingerprint(data, self.job.country_name)
+        data["_fingerprint"] = fp
+
+        # Save to SQLite (smart upsert)
+        result = await self.storage.insert_business(url, category, data)
+        if result == "new":
+            self.new_count += 1
+        else:
+            self.updated_count += 1
 
         # Append to raw CSV immediately
         await self.storage.append_raw_csv(data, category, url)
 
         self.scraped_count += 1
-        log.info(f"[L2] #{self.scraped_count} {data['Name']} — {url}")
+        log.info(f"[L2] #{self.scraped_count} [{result}] {data['Name']} — {url}")
 
         # Signal shutdown if limit reached
         if self.limit and self.scraped_count >= self.limit:

@@ -655,6 +655,22 @@ class ScrapePage(QWidget):
         lbl_scraped_label = QLabel("SCRAPED")
         lbl_scraped_label.setStyleSheet("font-size: 8px; color: #35353b; letter-spacing: 1px;")
 
+        self.lbl_total_new = QLabel("0")
+        self.lbl_total_new.setStyleSheet(
+            "font-weight: 700; font-size: 14px; color: #60a5fa; "
+            "font-family: 'Cascadia Code', 'Consolas', monospace;"
+        )
+        lbl_new_label = QLabel("NEW")
+        lbl_new_label.setStyleSheet("font-size: 8px; color: #35353b; letter-spacing: 1px;")
+
+        self.lbl_total_updated = QLabel("0")
+        self.lbl_total_updated.setStyleSheet(
+            "font-weight: 700; font-size: 14px; color: #a78bfa; "
+            "font-family: 'Cascadia Code', 'Consolas', monospace;"
+        )
+        lbl_updated_label = QLabel("UPDATED")
+        lbl_updated_label.setStyleSheet("font-size: 8px; color: #35353b; letter-spacing: 1px;")
+
         self.lbl_total_errors = QLabel("0")
         self.lbl_total_errors.setStyleSheet(
             "font-weight: 700; font-size: 14px; color: #f87171; "
@@ -672,6 +688,8 @@ class ScrapePage(QWidget):
         lbl_skipped_label.setStyleSheet("font-size: 8px; color: #35353b; letter-spacing: 1px;")
 
         for lbl, sub in [(self.lbl_total_scraped, lbl_scraped_label),
+                         (self.lbl_total_new, lbl_new_label),
+                         (self.lbl_total_updated, lbl_updated_label),
                          (self.lbl_total_errors, lbl_errors_label),
                          (self.lbl_total_skipped, lbl_skipped_label)]:
             col = QVBoxLayout()
@@ -1093,7 +1111,11 @@ class ScrapePage(QWidget):
         total_s = sum(s.scraped for s in self._stats_per_country.values())
         total_e = sum(s.errors for s in self._stats_per_country.values())
         total_sk = sum(s.skipped for s in self._stats_per_country.values())
+        total_new = sum(s.new for s in self._stats_per_country.values())
+        total_upd = sum(s.updated for s in self._stats_per_country.values())
         self.lbl_total_scraped.setText(str(total_s))
+        self.lbl_total_new.setText(str(total_new))
+        self.lbl_total_updated.setText(str(total_upd))
         self.lbl_total_errors.setText(str(total_e))
         self.lbl_total_skipped.setText(str(total_sk))
 
