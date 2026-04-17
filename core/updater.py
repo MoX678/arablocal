@@ -113,7 +113,8 @@ def check_for_update(current_version: str) -> Optional[dict]:
         for asset in data.get("assets", []):
             name = asset.get("name", "")
             if name.endswith("-win64.zip") and name.startswith("ArabLocal-"):
-                download_url = asset["browser_download_url"]
+                # Use API URL for private repos (browser_download_url fails on redirects)
+                download_url = asset.get("url") or asset["browser_download_url"]
                 asset_size = asset.get("size", 0)
                 break
 
@@ -145,7 +146,8 @@ def download_update(url: str, progress_callback=None) -> Optional[str]:
     """
     try:
         req = _make_request(url, timeout=300)
-        # For private repo assets, need Accept: application/octet-stream
+        # Override Accept for binary download from GitHub API asset URL
+        req.remove_header("Accept")
         req.add_header("Accept", "application/octet-stream")
         with urllib.request.urlopen(req, timeout=300) as resp:
             total = int(resp.headers.get("Content-Length", 0))
@@ -209,12 +211,13 @@ def apply_update(zip_path: str) -> bool:
 title ArabLocal Updater
 echo Waiting for application to close...
 :waitloop
-tasklist /FI "PID eq {pid}" /NH 2>NUL | findstr /B /C:" {pid} " >NUL
-if not errorlevel 1 (
+tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+if %ERRORLEVEL%==0 (
     timeout /t 1 /nobreak >NUL
     goto waitloop
 )
-echo Applying update...
+echo Application closed. Applying update...
+timeout /t 2 /nobreak >NUL
 xcopy /s /y /q "{source_dir}\\*" "{app_dir}\\"
 if errorlevel 1 (
     echo Update failed! Press any key to exit.
