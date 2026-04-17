@@ -207,8 +207,11 @@ def apply_update(zip_path: str) -> bool:
         bat_path = os.path.join(os.path.dirname(zip_path), "_update.bat")
         pid = os.getpid()
 
+        update_log = os.path.join(app_dir, "errors", "_update.log")
         bat_content = f"""@echo off
 title ArabLocal Updater
+set LOGFILE="{update_log}"
+echo [%date% %time%] Update started >> %LOGFILE%
 echo Waiting for application to close...
 :waitloop
 tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
@@ -216,20 +219,26 @@ if %ERRORLEVEL%==0 (
     timeout /t 1 /nobreak >NUL
     goto waitloop
 )
+echo [%date% %time%] Application closed >> %LOGFILE%
 echo Application closed. Applying update...
 timeout /t 2 /nobreak >NUL
 xcopy /s /y /q "{source_dir}\\*" "{app_dir}\\"
 if errorlevel 1 (
+    echo [%date% %time%] xcopy FAILED >> %LOGFILE%
     echo Update failed! Press any key to exit.
     pause
     exit /b 1
 )
+echo [%date% %time%] Files copied OK >> %LOGFILE%
 echo Update complete! Launching app...
-start "" "{os.path.join(app_dir, exe_name)}"
+echo [%date% %time%] Launching: {os.path.join(app_dir, exe_name)} >> %LOGFILE%
+start "" /D "{app_dir}" "{os.path.join(app_dir, exe_name)}"
+echo [%date% %time%] Start command returned %ERRORLEVEL% >> %LOGFILE%
 echo Cleaning up...
 timeout /t 2 /nobreak >NUL
 rmdir /s /q "{extract_dir}" 2>NUL
 del /q "{zip_path}" 2>NUL
+echo [%date% %time%] Cleanup done >> %LOGFILE%
 (goto) 2>nul & del "%~f0"
 """
         with open(bat_path, "w", encoding="utf-8") as f:

@@ -1,6 +1,6 @@
 """ArabLocal Scraper Core Package — modular scraping engine."""
 
-__version__ = "3.2.7"
+__version__ = "3.2.8"
 
 from core.config import JobConfig, BASE_URLS, COUNTRY_INFO, resolve_concurrency
 from core.delay import AdaptiveDelay
