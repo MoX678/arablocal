@@ -224,11 +224,13 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo Cleaning up...
-rmdir /s /q "{os.path.dirname(zip_path)}"
 echo Update complete! Launching app...
 start "" "{os.path.join(app_dir, exe_name)}"
-del "%~f0"
+echo Cleaning up...
+timeout /t 2 /nobreak >NUL
+rmdir /s /q "{extract_dir}" 2>NUL
+del /q "{zip_path}" 2>NUL
+(goto) 2>nul & del "%~f0"
 """
         with open(bat_path, "w", encoding="utf-8") as f:
             f.write(bat_content)
