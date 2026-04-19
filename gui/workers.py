@@ -468,10 +468,11 @@ class ScrapeWorker(QThread):
             # Emit checkpoint resume info
             cp = engine.storage.checkpoint_summary()
             if cp["completed"] or cp["in_progress"]:
-                self.checkpoint_info.emit(key, cp["completed"], cp["completed"] + cp["in_progress"])
+                total = cp.get("total_categories", cp["completed"] + cp["in_progress"])
+                self.checkpoint_info.emit(key, cp["completed"], total)
                 self.log_message.emit(
                     key, "INFO",
-                    f"Resuming: {cp['completed']} categories complete, "
+                    f"Resuming: {cp['completed']}/{total} categories complete, "
                     f"{cp['in_progress']} in-progress"
                 )
 

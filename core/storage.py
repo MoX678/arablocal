@@ -53,7 +53,7 @@ class StorageManager:
 
     # ─── Schema version ──────────────────────────────────────────────────
 
-    CURRENT_SCHEMA_VERSION = 2
+    CURRENT_SCHEMA_VERSION = 3
 
     # ─── Database Initialization ──────────────────────────────────────────
 
@@ -149,6 +149,15 @@ class StorageManager:
                 "last_seen_at = scraped_at WHERE first_seen_at IS NULL"
             )
             conn.commit()
+
+        # Migration v2 → v3: clean bogus checkpoints (completed=1 but urls_found=0)
+        if version < 3:
+            cleaned = conn.execute(
+                "DELETE FROM checkpoints WHERE completed = 1 AND urls_found = 0"
+            ).rowcount
+            conn.commit()
+            if cleaned:
+                log.info(f"[storage] Migration v3: cleaned {cleaned} bogus checkpoints")
 
         self._set_schema_version(conn, self.CURRENT_SCHEMA_VERSION)
         conn.commit()
@@ -261,12 +270,19 @@ class StorageManager:
     def checkpoint_summary(self) -> dict:
         with sqlite3.connect(self.db_path, timeout=15) as conn:
             completed = conn.execute(
-                "SELECT COUNT(*) FROM checkpoints WHERE completed = 1"
+                "SELECT COUNT(*) FROM checkpoints WHERE completed = 1 AND urls_found > 0"
             ).fetchone()[0]
             in_progress = conn.execute(
                 "SELECT COUNT(*) FROM checkpoints WHERE completed = 0"
             ).fetchone()[0]
-            return {"completed": completed, "in_progress": in_progress}
+            total_cats = conn.execute(
+                "SELECT COUNT(*) FROM categories"
+            ).fetchone()[0]
+            return {
+                "completed": completed,
+                "in_progress": in_progress,
+                "total_categories": total_cats,
+            }
 
     def checkpoint_clear(self):
         with sqlite3.connect(self.db_path, timeout=15) as conn:
@@ -428,16 +444,22 @@ class StorageManager:
             if all_rows:
                 all_records = []
                 all_keys_combined: Set[str] = set()
-                seen_fps: Set[str] = set()  # for dedup in combined file
+                seen_fps: Dict[str, dict] = {}  # fingerprint → winner record
                 total_before = len(all_rows)
 
                 for row in all_rows:
                     fp = row["fingerprint"] or ""
-                    # Dedup: skip duplicate fingerprints in combined export
+                    # Dedup: merge fields from duplicate into winner record
                     if dedup and fp:
                         if fp in seen_fps:
+                            # Merge: fill empty fields in winner from this duplicate
+                            winner = seen_fps[fp]
+                            dup_data = json.loads(row["data"])
+                            for k, v in dup_data.items():
+                                if v and not winner.get(k, ""):
+                                    winner[k] = v
                             continue
-                        seen_fps.add(fp)
+                        # First occurrence becomes the winner
 
                     d = json.loads(row["data"])
                     d["URL"] = row["url"]
@@ -446,8 +468,14 @@ class StorageManager:
                     d["Last_Seen"] = (row["last_seen_at"] or "")[:19]
                     if dedup and fp and fp in fp_category_map:
                         d["Appears_In_Categories"] = ", ".join(fp_category_map[fp])
+                    if dedup and fp:
+                        seen_fps[fp] = d  # store ref for field merging from later dupes
                     all_keys_combined.update(d.keys())
                     all_records.append(d)
+
+                # After merging, update all_keys from enriched records
+                for rec in all_records:
+                    all_keys_combined.update(rec.keys())
 
                 combined_order = ["Category"] + [c for c in base_order if c in all_keys_combined]
                 if "Appears_In_Categories" in all_keys_combined:

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import time
 from datetime import datetime
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
@@ -52,10 +54,30 @@ class CountryToggle(QPushButton):
 class CategoryCheckbox(QCheckBox):
     """Checkbox for a single category."""
 
-    def __init__(self, slug: str, name: str, parent=None):
-        super().__init__(name, parent)
+    def __init__(self, slug: str, name: str, done: bool = False, parent=None):
+        label = f"{name}  ✓ Done" if done else name
+        super().__init__(label, parent)
         self.slug = slug
-        self.setChecked(True)
+        self._done = done
+        if done:
+            self.setChecked(False)
+            self.setStyleSheet(
+                "QCheckBox { color: #34d399; font-size: 11px; }"
+                "QCheckBox::indicator { width: 13px; height: 13px; }"
+            )
+        else:
+            self.setChecked(True)
+
+    def mark_done(self):
+        if self._done:
+            return
+        self._done = True
+        self.setChecked(False)
+        self.setText(f"{self.text()}  ✓ Done")
+        self.setStyleSheet(
+            "QCheckBox { color: #34d399; font-size: 11px; }"
+            "QCheckBox::indicator { width: 13px; height: 13px; }"
+        )
 
 
 class CategoryProgressItem(QFrame):
@@ -406,6 +428,16 @@ class ScrapePage(QWidget):
         self.cat_scroll.setWidget(self.cat_container)
         left_layout.addWidget(self.cat_scroll)
 
+        # ── Remaining categories info ────────────────────────────────
+        self.remaining_info = QLabel("")
+        self.remaining_info.setWordWrap(True)
+        self.remaining_info.setStyleSheet(
+            "font-size: 10px; color: #56565e; "
+            "font-family: 'Cascadia Code', 'Consolas', monospace; "
+            "padding: 2px 0;"
+        )
+        left_layout.addWidget(self.remaining_info)
+
         # ── Cookie Status Indicator ──────────────────────────────────
         cookie_row = QHBoxLayout()
         cookie_row.setSpacing(6)
@@ -458,6 +490,7 @@ class ScrapePage(QWidget):
 
         # Threads
         lbl_threads = QLabel("THREADS")
+        lbl_threads.setToolTip("Concurrent browser tabs per country")
         lbl_threads.setStyleSheet(
             "font-size: 9px; font-weight: 600; color: #56565e; letter-spacing: 0.5px;"
         )
@@ -737,9 +770,50 @@ class ScrapePage(QWidget):
         selected = self._get_selected_countries()
         self.btn_fetch_cats.setEnabled(len(selected) > 0)
         self._update_proxy_indicator()
+        self._update_remaining_info()
 
     def _get_selected_countries(self) -> list[str]:
         return [k for k, t in self.country_toggles.items() if t.isChecked()]
+
+    def _update_remaining_info(self):
+        """Query checkpoint tables and show done/remaining per selected country."""
+        selected = self._get_selected_countries()
+        if not selected:
+            self.remaining_info.setText("")
+            return
+
+        output_dir = Path("output")
+        parts = []
+        for key in selected:
+            db_path = output_dir / key / f"{key}_staging.db"
+            if not db_path.exists():
+                parts.append(f"{key.upper()}: no data")
+                continue
+            try:
+                conn = sqlite3.connect(str(db_path))
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM categories")
+                total = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT COUNT(*) FROM checkpoints "
+                    "WHERE completed = 1 AND urls_found > 0"
+                )
+                done = cur.fetchone()[0]
+                conn.close()
+                remaining = max(0, total - done)
+                if remaining == 0 and total > 0:
+                    parts.append(f"{key.upper()}: {done}/{total} ✓")
+                else:
+                    parts.append(f"{key.upper()}: {done}/{total} ({remaining} left)")
+            except Exception:
+                parts.append(f"{key.upper()}: ?")
+
+        self.remaining_info.setText("  ".join(parts))
+        self.remaining_info.setStyleSheet(
+            "font-size: 10px; color: #88888f; "
+            "font-family: 'Cascadia Code', 'Consolas', monospace; "
+            "padding: 2px 0;"
+        )
 
     # ─── Category discovery ──────────────────────────────────────────────
 
@@ -805,6 +879,25 @@ class ScrapePage(QWidget):
         selected = self._get_selected_countries()
         any_cats = False
 
+        # Query done slugs per country
+        output_dir = Path("output")
+        done_slugs: dict[str, set] = {}
+        for country in selected:
+            db_path = output_dir / country / f"{country}_staging.db"
+            done_set: set[str] = set()
+            if db_path.exists():
+                try:
+                    conn = sqlite3.connect(str(db_path))
+                    rows = conn.execute(
+                        "SELECT category_slug FROM checkpoints "
+                        "WHERE completed = 1 AND urls_found > 0"
+                    ).fetchall()
+                    conn.close()
+                    done_set = {r[0] for r in rows}
+                except Exception:
+                    pass
+            done_slugs[country] = done_set
+
         for country in selected:
             cats = self._categories_cache.get(country, [])
             if not cats:
@@ -823,7 +916,8 @@ class ScrapePage(QWidget):
             for cat in cats:
                 slug = cat.get("slug", cat.get("name", "unknown"))
                 name = cat.get("name", slug)
-                cb = CategoryCheckbox(slug, name)
+                is_done = slug in done_slugs.get(country, set())
+                cb = CategoryCheckbox(slug, name, done=is_done)
                 self._category_checkboxes.append(cb)
                 self.cat_layout.addWidget(cb)
 
@@ -890,6 +984,36 @@ class ScrapePage(QWidget):
                     dashboard.update_running_status(
                         countries, categories, self._stats_per_country, elapsed
                     )
+        self._update_remaining_info()
+        self._refresh_done_checkboxes()
+
+    def _refresh_done_checkboxes(self):
+        """Mark category checkboxes as done if they completed during scraping."""
+        if not self._category_checkboxes:
+            return
+        selected = self._get_selected_countries()
+        if not selected:
+            return
+
+        output_dir = Path("output")
+        done_slugs: set[str] = set()
+        for country in selected:
+            db_path = output_dir / country / f"{country}_staging.db"
+            if db_path.exists():
+                try:
+                    conn = sqlite3.connect(str(db_path))
+                    rows = conn.execute(
+                        "SELECT category_slug FROM checkpoints "
+                        "WHERE completed = 1 AND urls_found > 0"
+                    ).fetchall()
+                    conn.close()
+                    done_slugs.update(r[0] for r in rows)
+                except Exception:
+                    pass
+
+        for cb in self._category_checkboxes:
+            if not cb._done and cb.slug in done_slugs:
+                cb.mark_done()
 
     # ─── Proxy helpers ───────────────────────────────────────────────────
 
@@ -950,8 +1074,7 @@ class ScrapePage(QWidget):
         all_cats_checked = no_preview or len(selected_cats) == len(self._category_checkboxes)
 
         threads_text = self.threads_combo.currentText()
-        num_jobs = len(countries)
-        concurrency = resolve_concurrency(threads_text, num_jobs)
+        concurrency = resolve_concurrency(threads_text, 1)  # per-country concurrency
         base_output = self.output_input.text().strip() or "output"
 
         jobs = []
@@ -1151,8 +1274,10 @@ class ScrapePage(QWidget):
         self._log(f"[{country.upper()}] Error: {error}", "#f87171")
 
     def _on_checkpoint_info(self, country: str, completed: int, total: int):
+        remaining = max(0, total - completed)
         self._log(
-            f"[{country.upper()}] Checkpoint: {completed}/{total} categories done — resuming",
+            f"[{country.upper()}] Checkpoint: {completed}/{total} categories done "
+            f"({remaining} remaining) — resuming",
             "#60a5fa"
         )
 
@@ -1299,4 +1424,5 @@ class ScrapePage(QWidget):
         super().showEvent(event)
         self._update_proxy_indicator()
         self._update_button_styles()
+        self._update_remaining_info()
 

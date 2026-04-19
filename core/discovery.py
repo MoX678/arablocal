@@ -227,8 +227,8 @@ async def crawl_category_listings(engine: "ArabLocalEngine", cat_url: str,
 
     # Check checkpoint for resume
     checkpoint = engine.storage.checkpoint_get(cat_name)
-    if checkpoint and checkpoint["completed"]:
-        log.info(f"[L1] {cat_name} — already completed (checkpoint), skipping")
+    if checkpoint and checkpoint["completed"] and checkpoint["urls_found"] > 0:
+        log.info(f"[L1] {cat_name} — already completed ({checkpoint['urls_found']} URLs), skipping")
         return 0
 
     url_count = 0
@@ -371,9 +371,9 @@ async def crawl_category_listings(engine: "ArabLocalEngine", cat_url: str,
             page_num += 1
             current_url = f"{cat_url}/page:{page_num}"
 
-    # Mark completed if we didn't exit due to shutdown/limit
+    # Mark completed if we found URLs and didn't exit due to shutdown/limit
     if not engine.shutdown_event.is_set() and not (engine.limit and engine.scraped_count >= engine.limit):
-        await engine.storage.checkpoint_save(cat_name, page_num, url_count, completed=True)
+        await engine.storage.checkpoint_save(cat_name, page_num, url_count, completed=(url_count > 0))
 
     log.info(f"[L1] Total URLs queued for {cat_name}: {url_count}")
     return url_count
@@ -386,8 +386,8 @@ async def kw_crawl_listings(engine: "ArabLocalEngine", cat_url: str,
                              queue: Optional[asyncio.Queue] = None) -> int:
     """Kuwait: AJAX 'Load more' pagination via direct HTTP requests."""
     checkpoint = engine.storage.checkpoint_get(cat_name)
-    if checkpoint and checkpoint["completed"]:
-        log.info(f"[L1-KW] {cat_name} — already completed (checkpoint), skipping")
+    if checkpoint and checkpoint["completed"] and checkpoint["urls_found"] > 0:
+        log.info(f"[L1-KW] {cat_name} — already completed ({checkpoint['urls_found']} URLs), skipping")
         return 0
 
     existing = engine.storage.get_existing_urls(cat_name)
@@ -529,7 +529,7 @@ async def kw_crawl_listings(engine: "ArabLocalEngine", cat_url: str,
         )
 
     if not engine.shutdown_event.is_set():
-        await engine.storage.checkpoint_save(cat_name, 1, url_count, completed=True)
+        await engine.storage.checkpoint_save(cat_name, 1, url_count, completed=(url_count > 0))
 
     log.info(f"[L1-KW] {cat_name}: TOTAL {url_count} new URLs queued (from {len(seen)} found)")
     return url_count

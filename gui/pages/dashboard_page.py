@@ -111,16 +111,16 @@ class CountryBand(QFrame):
         self.count_lbl.setFixedWidth(80)
         layout.addWidget(self.count_lbl)
 
-        # Categories count
+        # Categories count (done/total)
         self.cats_lbl = QLabel("")
         self.cats_lbl.setStyleSheet(
             "font-size: 11px; color: #56565e; "
             "font-family: 'Cascadia Code', monospace; background: transparent; border: none;"
         )
-        self.cats_lbl.setFixedWidth(50)
+        self.cats_lbl.setFixedWidth(70)
         layout.addWidget(self.cats_lbl)
 
-    def set_counts(self, businesses: int, categories: int):
+    def set_counts(self, businesses: int, categories: int, done: int = 0):
         if businesses > 0:
             self.count_lbl.setText(f"{businesses:,}")
             self.dot.setStyleSheet(
@@ -132,7 +132,22 @@ class CountryBand(QFrame):
                 "font-size: 14px; color: #56565e; background: transparent; border: none;"
             )
         if categories > 0:
-            self.cats_lbl.setText(f"{categories} cats")
+            remaining = categories - done
+            if done > 0:
+                self.cats_lbl.setText(f"{done}/{categories}")
+            else:
+                self.cats_lbl.setText(f"0/{categories}")
+            # Color: green if all done, yellow if partial, gray if nothing
+            if remaining == 0:
+                color = "#34d399"
+            elif done > 0:
+                color = "#eab308"
+            else:
+                color = "#56565e"
+            self.cats_lbl.setStyleSheet(
+                f"font-size: 11px; color: {color}; "
+                f"font-family: 'Cascadia Code', monospace; background: transparent; border: none;"
+            )
         else:
             self.cats_lbl.setText("")
 
@@ -144,7 +159,7 @@ class DashboardPage(QWidget):
         self._setup_ui()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh_stats)
-        self._timer.start(10_000)
+        self._timer.start(3_000)
 
     def _setup_ui(self):
         outer = QVBoxLayout(self)
@@ -170,11 +185,13 @@ class DashboardPage(QWidget):
 
         self.m_businesses = MetricSlab("Businesses", "0", "#34d399")
         self.m_categories = MetricSlab("Categories", "0", "#60a5fa")
+        self.m_remaining = MetricSlab("Remaining", "0", "#f43f5e")
         self.m_countries = MetricSlab("Active", "0", "#eab308")
         self.m_csvs = MetricSlab("CSV Files", "0", "#f97316")
 
         metrics_layout.addWidget(self.m_businesses)
         metrics_layout.addWidget(self.m_categories)
+        metrics_layout.addWidget(self.m_remaining)
         metrics_layout.addWidget(self.m_countries)
         metrics_layout.addWidget(self.m_csvs)
         metrics_layout.addStretch()
@@ -299,6 +316,8 @@ class DashboardPage(QWidget):
         output_dir = Path("output")
         total_biz = 0
         total_cats = 0
+        total_done = 0
+        total_remaining = 0
         countries_found = 0
         csv_count = 0
 
@@ -306,6 +325,7 @@ class DashboardPage(QWidget):
             db_path = output_dir / key / f"{key}_staging.db"
             biz_count = 0
             cat_count = 0
+            done_count = 0
             if db_path.exists():
                 try:
                     conn = sqlite3.connect(str(db_path))
@@ -314,22 +334,30 @@ class DashboardPage(QWidget):
                     biz_count = cur.fetchone()[0]
                     cur.execute("SELECT COUNT(*) FROM categories")
                     cat_count = cur.fetchone()[0]
+                    cur.execute(
+                        "SELECT COUNT(*) FROM checkpoints "
+                        "WHERE completed = 1 AND urls_found > 0"
+                    )
+                    done_count = cur.fetchone()[0]
                     conn.close()
                     total_biz += biz_count
                     total_cats += cat_count
+                    total_done += done_count
+                    total_remaining += max(0, cat_count - done_count)
                     if biz_count > 0:
                         countries_found += 1
                 except Exception:
                     pass
 
             if key in self.country_bands:
-                self.country_bands[key].set_counts(biz_count, cat_count)
+                self.country_bands[key].set_counts(biz_count, cat_count, done_count)
 
         if output_dir.exists():
             csv_count = sum(1 for _ in output_dir.rglob("*.csv"))
 
         self.m_businesses.set_value(f"{total_biz:,}")
         self.m_categories.set_value(f"{total_cats:,}")
+        self.m_remaining.set_value(f"{total_remaining:,}")
         self.m_countries.set_value(str(countries_found))
         self.m_csvs.set_value(str(csv_count))
 
