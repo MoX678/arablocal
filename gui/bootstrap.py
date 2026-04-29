@@ -235,27 +235,27 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
     root.title("ArabLocal Scraper -- Installing Dependencies")
     root.geometry("500x400")
     root.resizable(False, False)
-    root.configure(bg="#1e1e2e")
+    root.configure(bg="#0c0c0e")
 
     # Title
     tk.Label(
         root,
         text="ArabLocal Scraper",
         font=("Segoe UI", 18, "bold"),
-        fg="#cdd6f4",
-        bg="#1e1e2e",
+        fg="#e4e4e7",
+        bg="#0c0c0e",
     ).pack(pady=(20, 5))
 
     tk.Label(
         root,
         text="Installing required packages...",
         font=("Segoe UI", 11),
-        fg="#a6adc8",
-        bg="#1e1e2e",
+        fg="#88888f",
+        bg="#0c0c0e",
     ).pack(pady=(0, 15))
 
     # Package list frame
-    frame = tk.Frame(root, bg="#1e1e2e")
+    frame = tk.Frame(root, bg="#0c0c0e")
     frame.pack(padx=30, fill="x")
 
     labels = {}
@@ -266,9 +266,9 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
         tk.Label(
             frame,
             text=pip_name,
-            font=("Consolas", 10),
-            fg="#cdd6f4",
-            bg="#1e1e2e",
+            font=("Cascadia Code", 10),
+            fg="#e4e4e7",
+            bg="#0c0c0e",
             anchor="w",
         ).grid(row=i, column=0, sticky="w", pady=4)
 
@@ -280,8 +280,8 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
             frame,
             text="Waiting",
             font=("Segoe UI", 9),
-            fg="#a6adc8",
-            bg="#1e1e2e",
+            fg="#56565e",
+            bg="#0c0c0e",
             width=12,
         )
         sl.grid(row=i, column=2, pady=4)
@@ -293,8 +293,8 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
         root,
         textvariable=status_msg,
         font=("Segoe UI", 10),
-        fg="#a6e3a1",
-        bg="#1e1e2e",
+        fg="#34d399",
+        bg="#0c0c0e",
     ).pack(pady=15)
 
     # Restart button (hidden initially)
@@ -302,9 +302,9 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
         root,
         text="Restart Application",
         font=("Segoe UI", 12, "bold"),
-        fg="#1e1e2e",
-        bg="#a6e3a1",
-        activebackground="#94e2d5",
+        fg="#0c0c0e",
+        bg="#34d399",
+        activebackground="#5eead4",
         command=lambda: _restart(root),
         state="disabled",
     )
@@ -324,7 +324,7 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
         def _run():
             for import_name, pip_name in missing:
                 progress_bars[import_name].start(15)
-                status_labels[import_name].config(text="Installing...", fg="#f9e2af")
+                status_labels[import_name].config(text="Installing...", fg="#eab308")
                 status_msg.set(f"Installing {pip_name}...")
 
                 result = subprocess.run(
@@ -338,11 +338,11 @@ def show_installer_gui(missing: list[tuple[str, str]]) -> bool:
                 if result.returncode == 0:
                     progress_bars[import_name].config(mode="determinate")
                     progress_bars[import_name]["value"] = 100
-                    status_labels[import_name].config(text="Done", fg="#a6e3a1")
+                    status_labels[import_name].config(text="Done", fg="#34d399")
                 else:
                     progress_bars[import_name].config(mode="determinate")
                     progress_bars[import_name]["value"] = 0
-                    status_labels[import_name].config(text="Failed", fg="#f38ba8")
+                    status_labels[import_name].config(text="Failed", fg="#f87171")
                     install_success[0] = False
 
             if install_success[0]:

@@ -162,11 +162,49 @@ def _is_prerelease(data: dict) -> bool:
     return bool(_re.search(r"(alpha|beta|rc|dev|pre)", tag, _re.IGNORECASE))
 
 
-def check_for_update(current_version: str) -> Optional[dict]:
+# ─── Skip-version persistence (user-dismissed releases) ──────────────────
+
+_SKIP_FILE = os.path.join(_DPAPI_TOKEN_DIR, "skip_version.txt")
+
+
+def get_skipped_version() -> Optional[str]:
+    """Return the version tag the user asked to skip, if any."""
+    try:
+        if os.path.isfile(_SKIP_FILE):
+            with open(_SKIP_FILE, "r", encoding="utf-8") as f:
+                v = f.read().strip()
+            return v or None
+    except Exception:
+        pass
+    return None
+
+
+def set_skipped_version(version: str) -> None:
+    """Persist a version tag the user wants to skip."""
+    try:
+        os.makedirs(_DPAPI_TOKEN_DIR, exist_ok=True)
+        with open(_SKIP_FILE, "w", encoding="utf-8") as f:
+            f.write(version.strip())
+    except Exception as e:
+        log.warning(f"Could not save skipped version: {e}")
+
+
+def clear_skipped_version() -> None:
+    """Forget any skipped version (e.g. on manual 'check for updates')."""
+    try:
+        if os.path.isfile(_SKIP_FILE):
+            os.remove(_SKIP_FILE)
+    except Exception:
+        pass
+
+
+def check_for_update(current_version: str,
+                     ignore_skip: bool = False) -> Optional[dict]:
     """Check GitHub for a newer stable release.
 
     Returns dict with update info or None if up-to-date.
-    Skips pre-release/draft versions.
+    Skips pre-release/draft versions and any version the user previously
+    chose to skip (unless `ignore_skip=True`, e.g. for manual checks).
     """
     try:
         req = _make_request(GITHUB_API)
@@ -187,6 +225,13 @@ def check_for_update(current_version: str) -> Optional[dict]:
 
         if remote_ver <= local_ver:
             return None
+
+        # Respect the user's "skip this version" choice
+        if not ignore_skip:
+            skipped = get_skipped_version()
+            if skipped and skipped == tag.lstrip("v"):
+                log.debug(f"Skipping previously-dismissed version: {tag}")
+                return None
 
         # Find the win64 zip asset
         download_url = None

@@ -501,8 +501,8 @@ class ScrapeWorker(QThread):
                 f"Completed: {engine.scraped_count} businesses in {elapsed:.0f}s"
             )
 
-            # Export sorted CSVs + Excel
-            engine.storage.export_sorted_csvs(dedup=True)
+            # Export sorted CSVs (with validation + raw-CSV fallback) + Excel
+            engine.storage.safe_export(dedup=True)
             engine.storage.export_excel(dedup=True)
 
         except Exception as e:

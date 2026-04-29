@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
@@ -43,6 +44,9 @@ class StorageManager:
 
         self.db_lock = asyncio.Lock()
         self.csv_lock = asyncio.Lock()
+        # Serializes export passes (DB-based + raw fallback) across threads
+        # so periodic exports can't race the final export at shutdown.
+        self._export_lock = threading.Lock()
 
         # CSV batch buffer
         self._csv_buffer: List[dict] = []
@@ -497,6 +501,266 @@ class StorageManager:
                     f"{self.all_csv_path}{dedup_msg}"
                 )
 
+    # ─── Validation + Raw-CSV Fallback ────────────────────────────────────
+
+    @staticmethod
+    def _csv_row_count(path: str) -> int:
+        """Count data rows (excluding header) in a CSV file. Returns 0 if missing."""
+        if not path or not os.path.exists(path):
+            return 0
+        try:
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                # Subtract header line; clamp to >= 0 for empty files
+                n = sum(1 for _ in f)
+                return max(0, n - 1)
+        except Exception:
+            return 0
+
+    def validate_exports(self) -> dict:
+        """Compute row counts across raw CSV, all CSV, per-category CSVs, and DB.
+
+        Returns a dict: {raw, all, categories, db, db_unique}.
+        `db` is the raw business row count; `db_unique` is the deduped count
+        (unique fingerprints + rows with no fingerprint), which is what the
+        combined `all CSV` should match when `dedup=True`.
+        """
+        raw_n = self._csv_row_count(self.raw_csv_path)
+        all_n = self._csv_row_count(self.all_csv_path)
+        cats_n = 0
+        if os.path.isdir(self.categories_dir):
+            for fn in os.listdir(self.categories_dir):
+                if fn.lower().endswith(".csv"):
+                    cats_n += self._csv_row_count(
+                        os.path.join(self.categories_dir, fn)
+                    )
+        db_n = self.get_total_businesses()
+        try:
+            stats = self.get_duplicate_stats()
+            db_unique = int(stats.get("unique", db_n))
+        except Exception:
+            db_unique = db_n
+        return {
+            "raw": raw_n,
+            "all": all_n,
+            "categories": cats_n,
+            "db": db_n,
+            "db_unique": db_unique,
+        }
+
+    def export_from_raw_csv(self, dedup: bool = True):
+        """Rebuild per-category sorted CSVs and the combined all CSV directly
+        from the raw CSV file. Used as a backup path when DB-based export
+        produces inconsistent output (e.g. DB corrupted or empty).
+
+        Dedup keeps the latest occurrence per URL (raw CSV is append-only,
+        so refreshes for the same URL appear later in the file).
+        """
+        if not os.path.exists(self.raw_csv_path):
+            log.warning("[raw-fallback] Raw CSV not found; cannot rebuild.")
+            return
+
+        try:
+            with open(self.raw_csv_path, "r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+        except Exception as e:
+            log.error(f"[raw-fallback] Failed to read raw CSV: {e}")
+            return
+
+        if not rows:
+            log.warning("[raw-fallback] Raw CSV is empty.")
+            return
+
+        # Per-category dedup: keep latest row for each (URL, Category) pair so
+        # refreshed scrapes supersede earlier ones, but a URL that legitimately
+        # appears in multiple categories is preserved in each.
+        if dedup:
+            by_pair: Dict[tuple, dict] = {}
+            for r in rows:
+                u = r.get("URL", "")
+                c = r.get("Category", "")
+                if u:
+                    by_pair[(u, c)] = r
+            rows = list(by_pair.values())
+
+        # Drop transient runtime columns from output
+        drop_cols = {"Runtime_Sec", "Scraped_At"}
+
+        social_keys = set(SOCIAL_DOMAINS.values())
+        base_order = ["Name", "Phone_1", "Phone_2", "Phone_3", "WhatsApp",
+                      "Email", "Location", "Area",
+                      "Governorate", "Country", "About", "Website",
+                      "Rating", "Views", "Fax", "First_Seen", "Last_Seen", "URL"]
+
+        def sort_tier(r):
+            has_web = bool(r.get("Website"))
+            has_soc = any(r.get(k) for k in social_keys)
+            if not has_web and not has_soc:
+                return 1
+            if not has_web and has_soc:
+                return 2
+            return 3
+
+        # ── Per-category CSVs ────────────────────────────────────────────
+        by_cat: Dict[str, List[dict]] = {}
+        for r in rows:
+            cat = r.get("Category", "")
+            if cat:
+                by_cat.setdefault(cat, []).append(r)
+
+        os.makedirs(self.categories_dir, exist_ok=True)
+
+        for cat, recs in by_cat.items():
+            if not recs:
+                continue
+            all_keys: Set[str] = set()
+            for r in recs:
+                all_keys.update(k for k, v in r.items() if v)
+            all_keys -= drop_cols
+            all_keys.discard("Category")
+            fieldnames = [c for c in base_order if c in all_keys]
+            fieldnames += sorted(k for k in all_keys if k not in fieldnames)
+
+            recs_sorted = sorted(recs, key=sort_tier)
+
+            safe_name = re.sub(r"[^a-z0-9]+", "_", cat.lower()).strip("_")
+            filename = os.path.join(self.categories_dir, f"{safe_name}.csv")
+            try:
+                with open(filename, "w", newline="", encoding="utf-8-sig") as fh:
+                    writer = csv.DictWriter(
+                        fh, fieldnames=fieldnames, extrasaction="ignore"
+                    )
+                    writer.writeheader()
+                    for rec in recs_sorted:
+                        writer.writerow({col: rec.get(col, "") for col in fieldnames})
+                log.info(f"[raw-fallback] {len(recs_sorted)} -> {filename}")
+            except Exception as e:
+                log.warning(f"[raw-fallback] Failed writing {filename}: {e}")
+
+        # ── Combined all CSV (URL-deduped, with merged categories) ───────
+        # Mirror the DB-based combined export: collapse cross-category
+        # duplicates by URL, merge non-empty fields from each occurrence,
+        # and aggregate the category list under `Appears_In_Categories`.
+        if dedup:
+            combined_by_url: Dict[str, dict] = {}
+            cats_by_url: Dict[str, List[str]] = {}
+            for r in rows:
+                u = r.get("URL", "")
+                if not u:
+                    continue
+                cat = r.get("Category", "")
+                if u not in combined_by_url:
+                    combined_by_url[u] = dict(r)
+                    cats_by_url[u] = [cat] if cat else []
+                else:
+                    winner = combined_by_url[u]
+                    for k, v in r.items():
+                        if v and not winner.get(k):
+                            winner[k] = v
+                    if cat and cat not in cats_by_url[u]:
+                        cats_by_url[u].append(cat)
+            for u, rec in combined_by_url.items():
+                if len(cats_by_url[u]) > 1:
+                    rec["Appears_In_Categories"] = ", ".join(cats_by_url[u])
+            combined_rows = list(combined_by_url.values())
+        else:
+            combined_rows = rows
+
+        all_keys_combined: Set[str] = set()
+        for r in combined_rows:
+            all_keys_combined.update(k for k, v in r.items() if v)
+        all_keys_combined -= drop_cols
+        combined_order = ["Category"] + [c for c in base_order if c in all_keys_combined]
+        if "Appears_In_Categories" in all_keys_combined:
+            combined_order.append("Appears_In_Categories")
+        combined_order += sorted(
+            k for k in all_keys_combined if k not in combined_order
+        )
+
+        # Apply the same priority sort as per-category output for consistency
+        combined_rows = sorted(combined_rows, key=sort_tier)
+
+        try:
+            with open(self.all_csv_path, "w", newline="", encoding="utf-8-sig") as fh:
+                writer = csv.DictWriter(
+                    fh, fieldnames=combined_order, extrasaction="ignore"
+                )
+                writer.writeheader()
+                for rec in combined_rows:
+                    writer.writerow({col: rec.get(col, "") for col in combined_order})
+            log.info(f"[raw-fallback] {len(combined_rows)} -> {self.all_csv_path}")
+        except Exception as e:
+            log.warning(f"[raw-fallback] Failed writing {self.all_csv_path}: {e}")
+
+    def safe_export(self, dedup: bool = True) -> dict:
+        """Primary DB-based export with validation and automatic raw-CSV fallback.
+
+        Flow:
+          1. Run `export_sorted_csvs` (DB-based).
+          2. Validate row counts (raw / all / categories / db / db_unique).
+          3. If `all` or `categories` are clearly inconsistent (zero while
+             data exists, or far below the deduped DB count), rebuild from
+             the raw CSV.
+          4. Re-validate and log the final counts.
+
+        Serialised by `_export_lock` so concurrent callers (e.g. periodic
+        + final shutdown export) cannot trample each other's CSV writes.
+
+        Returns the final counts dict.
+        """
+        with self._export_lock:
+            try:
+                self.export_sorted_csvs(dedup=dedup)
+            except Exception as e:
+                log.error(f"[validate] Primary export failed: {e}")
+
+            counts = self.validate_exports()
+            log.info(
+                "[validate] db=%d (unique=%d)  all=%d  categories=%d  raw=%d"
+                % (counts["db"], counts["db_unique"], counts["all"],
+                   counts["categories"], counts["raw"])
+            )
+
+            db_n = counts["db"]
+            db_unique = counts.get("db_unique", db_n)
+            all_n = counts["all"]
+            cats_n = counts["categories"]
+            raw_n = counts["raw"]
+
+            # Expected size of the combined CSV when dedup=True is db_unique;
+            # when dedup=False it is db_n. Compare against the right baseline.
+            expected_all = db_unique if dedup else db_n
+
+            # Inconsistency heuristics — fallback only if raw clearly has data
+            # that didn't make it to the export artifacts.
+            needs_fallback = False
+            reason = ""
+            if raw_n > 0 and all_n == 0:
+                needs_fallback = True
+                reason = "all CSV is empty"
+            elif raw_n > 0 and cats_n == 0 and db_n > 0:
+                needs_fallback = True
+                reason = "no per-category CSVs written"
+            elif expected_all > 0 and all_n > 0 and all_n * 2 < expected_all:
+                # All CSV has < half of expected unique rows — suspicious.
+                needs_fallback = True
+                reason = (
+                    f"all CSV ({all_n}) far below expected ({expected_all})"
+                )
+
+            if needs_fallback:
+                log.warning(
+                    f"[validate] Inconsistency: {reason}. Rebuilding from raw CSV…"
+                )
+                self.export_from_raw_csv(dedup=dedup)
+                counts = self.validate_exports()
+                log.info(
+                    "[validate] post-fallback  all=%d  categories=%d  raw=%d"
+                    % (counts["all"], counts["categories"], counts["raw"])
+                )
+
+            return counts
+
     # ─── Excel Export ─────────────────────────────────────────────────────
 
     def export_excel(self, output_path: Optional[str] = None, dedup: bool = True):
@@ -706,6 +970,7 @@ class StorageManager:
                            alt_fill, link_font, thin_border):
         """Write records to an Excel worksheet with formatting."""
         from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Alignment
 
         # Header row
         for col_idx, col_name in enumerate(fieldnames, 1):

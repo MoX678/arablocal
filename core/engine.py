@@ -476,6 +476,36 @@ class ArabLocalEngine:
         self.cat_task_id = progress.add_task(f"[bold]{country_label} Categories[/bold]", total=total_cats)
         self.biz_task_id = progress.add_task(f"[bold]{country_label} Businesses[/bold]", total=0)
 
+        # ── Periodic export task (keeps sorted CSVs + all CSV fresh) ─────
+        async def _periodic_export():
+            """Re-export per-category sorted CSVs and combined all CSV
+            every ~45s while scraping is in progress, so users see live
+            data instead of stale files from the previous run."""
+            interval = 45.0
+            loop = asyncio.get_running_loop()
+            while not self.shutdown_event.is_set():
+                try:
+                    await asyncio.sleep(interval)
+                except asyncio.CancelledError:
+                    return
+                if self.shutdown_event.is_set():
+                    return
+                try:
+                    # Flush raw CSV buffer first so all artifacts agree
+                    await self.storage.flush_csv()
+                    await loop.run_in_executor(
+                        None,
+                        lambda: self.storage.safe_export(dedup=True),
+                    )
+                except asyncio.CancelledError:
+                    return
+                except Exception as e:
+                    log.warning(
+                        f"[{self.job.country_key}] periodic export failed: {e}"
+                    )
+
+        export_task = asyncio.create_task(_periodic_export())
+
         try:
             # L1 producer
             async def l1_producer(cat):
@@ -559,7 +589,29 @@ class ArabLocalEngine:
             if all_tasks:
                 await asyncio.gather(*all_tasks, return_exceptions=True)
         finally:
+            export_task.cancel()
+            try:
+                await export_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                log.warning(
+                    f"[{self.job.country_key}] periodic export task error: {e}"
+                )
             await self.storage.flush_csv()
+            # One last sync export so files are current the moment the
+            # pipeline ends (covers cancel / crash / completion paths).
+            # `safe_export` is serialised by an internal lock, so this will
+            # transparently wait for any in-flight periodic export to finish
+            # before running, preventing concurrent CSV writes.
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None,
+                    lambda: self.storage.safe_export(dedup=True),
+                )
+            except Exception as e:
+                log.warning(f"[{self.job.country_key}] final export failed: {e}")
             progress.stop()
             self.progress = None
             await self._close_session()
