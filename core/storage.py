@@ -52,6 +52,7 @@ class StorageManager:
         self._csv_buffer: List[dict] = []
         self._csv_fieldnames: Optional[List[str]] = None
         self._csv_flush_size = 25
+        self._uses_stable_raw_header = os.path.basename(self.raw_csv_path).lower() in {"kw_raw.csv", "om_raw.csv"}
 
         self._init_db()
 
@@ -308,16 +309,26 @@ class StorageManager:
                     "Scraped_At": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
                     "Runtime_Sec": f"{elapsed:.0f}",
                 }
-                all_keys = list(BASE_FIELDS) + sorted(
-                    k for k in data if k not in BASE_FIELDS
-                )
+                if self._uses_stable_raw_header:
+                    all_keys = (
+                        list(BASE_FIELDS)
+                        + sorted(set(SOCIAL_DOMAINS.values()))
+                        + ["First_Seen", "Last_Seen"]
+                    )
+                else:
+                    all_keys = list(BASE_FIELDS) + sorted(
+                        k for k in data if k not in BASE_FIELDS
+                    )
                 row.update({k: data.get(k, "") for k in all_keys})
                 self._csv_buffer.append(row)
 
-                # Recompute fieldnames only when new keys appear
                 fieldnames = ["Category", "URL", "Scraped_At", "Runtime_Sec"] + all_keys
-                if self._csv_fieldnames is None or set(fieldnames) != set(self._csv_fieldnames):
+                if self._uses_stable_raw_header:
                     self._csv_fieldnames = fieldnames
+                else:
+                    # Recompute fieldnames only when new keys appear
+                    if self._csv_fieldnames is None or set(fieldnames) != set(self._csv_fieldnames):
+                        self._csv_fieldnames = fieldnames
 
                 if len(self._csv_buffer) >= self._csv_flush_size:
                     self._flush_csv_buffer()
@@ -330,6 +341,8 @@ class StorageManager:
             return
         try:
             file_exists = os.path.exists(self.raw_csv_path)
+            if file_exists:
+                self._normalize_raw_csv(self._csv_fieldnames)
             with open(self.raw_csv_path, "a", newline="", encoding="utf-8-sig") as fh:
                 writer = csv.DictWriter(fh, fieldnames=self._csv_fieldnames, extrasaction="ignore")
                 if not file_exists:
@@ -338,6 +351,43 @@ class StorageManager:
             self._csv_buffer.clear()
         except Exception as e:
             log.warning(f"Raw CSV flush failed: {e}")
+
+    def _normalize_raw_csv(self, fieldnames: List[str]):
+        try:
+            with open(self.raw_csv_path, "r", newline="", encoding="utf-8-sig") as fh:
+                rows = list(csv.reader(fh))
+        except FileNotFoundError:
+            return
+        except Exception as e:
+            log.warning(f"Raw CSV normalize read failed: {e}")
+            return
+
+        if not rows:
+            return
+
+        header = rows[0]
+        if header == fieldnames and all(len(row) == len(fieldnames) for row in rows[1:]):
+            return
+
+        normalized = [fieldnames]
+        for row in rows[1:]:
+            if header == fieldnames:
+                normalized.append((row + [""] * len(fieldnames))[:len(fieldnames)])
+                continue
+
+            values = {header[i]: value for i, value in enumerate(row[:len(header)]) if i < len(header)}
+            padded = (row + [""] * len(fieldnames))[:len(fieldnames)]
+            normalized.append([
+                values.get(name, padded[i] if i < len(padded) else "")
+                for i, name in enumerate(fieldnames)
+            ])
+
+        try:
+            with open(self.raw_csv_path, "w", newline="", encoding="utf-8-sig") as fh:
+                writer = csv.writer(fh)
+                writer.writerows(normalized)
+        except Exception as e:
+            log.warning(f"Raw CSV normalize write failed: {e}")
 
     async def flush_csv(self):
         """Force-flush remaining CSV buffer (call at shutdown)."""
