@@ -52,7 +52,11 @@ class StorageManager:
         self._csv_buffer: List[dict] = []
         self._csv_fieldnames: Optional[List[str]] = None
         self._csv_flush_size = 25
-        self._uses_stable_raw_header = os.path.basename(self.raw_csv_path).lower() in {"kw_raw.csv", "om_raw.csv"}
+        # Use stable header for ALL countries to prevent column drift
+        self._uses_stable_raw_header = True
+        # Track URLs already written to raw CSV to prevent duplicates on resume
+        self._raw_csv_urls: Set[str] = set()
+        self._raw_csv_urls_loaded = False
 
         self._init_db()
 
@@ -296,10 +300,39 @@ class StorageManager:
 
     # ─── Raw CSV (batched append) ─────────────────────────────────────────
 
+    def _load_raw_csv_urls(self):
+        """Load the set of URLs already in the raw CSV (called once, lazily)."""
+        if self._raw_csv_urls_loaded:
+            return
+        self._raw_csv_urls_loaded = True
+        if not os.path.exists(self.raw_csv_path):
+            return
+        try:
+            with open(self.raw_csv_path, "r", encoding="utf-8-sig", newline="") as fh:
+                reader = csv.DictReader(fh)
+                for row in reader:
+                    u = row.get("URL", "").strip()
+                    if u:
+                        self._raw_csv_urls.add(u)
+            log.info(f"[raw-csv] Loaded {len(self._raw_csv_urls)} existing URLs from raw CSV")
+        except Exception as e:
+            log.warning(f"[raw-csv] Failed to load existing URLs: {e}")
+
     async def append_raw_csv(self, data: dict, category: str, url: str):
-        """Buffer a business row and flush to CSV when buffer is full."""
+        """Buffer a business row and flush to CSV when buffer is full.
+
+        Skips URLs that have already been written to the raw CSV to prevent
+        duplicate rows on resume/re-scrape.
+        """
         async with self.csv_lock:
             try:
+                # Lazy-load existing URLs on first call
+                self._load_raw_csv_urls()
+
+                # Skip if URL already in raw CSV (prevents duplicates on resume)
+                if url in self._raw_csv_urls:
+                    return
+
                 elapsed = 0.0
                 if self._start_time_ref:
                     elapsed = self._start_time_ref()
@@ -309,26 +342,19 @@ class StorageManager:
                     "Scraped_At": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
                     "Runtime_Sec": f"{elapsed:.0f}",
                 }
-                if self._uses_stable_raw_header:
-                    all_keys = (
-                        list(BASE_FIELDS)
-                        + sorted(set(SOCIAL_DOMAINS.values()))
-                        + ["First_Seen", "Last_Seen"]
-                    )
-                else:
-                    all_keys = list(BASE_FIELDS) + sorted(
-                        k for k in data if k not in BASE_FIELDS
-                    )
+                # Stable header for ALL countries: BASE_FIELDS + sorted socials
+                all_keys = (
+                    list(BASE_FIELDS)
+                    + sorted(set(SOCIAL_DOMAINS.values()))
+                )
                 row.update({k: data.get(k, "") for k in all_keys})
                 self._csv_buffer.append(row)
 
+                # Track this URL as written
+                self._raw_csv_urls.add(url)
+
                 fieldnames = ["Category", "URL", "Scraped_At", "Runtime_Sec"] + all_keys
-                if self._uses_stable_raw_header:
-                    self._csv_fieldnames = fieldnames
-                else:
-                    # Recompute fieldnames only when new keys appear
-                    if self._csv_fieldnames is None or set(fieldnames) != set(self._csv_fieldnames):
-                        self._csv_fieldnames = fieldnames
+                self._csv_fieldnames = fieldnames
 
                 if len(self._csv_buffer) >= self._csv_flush_size:
                     self._flush_csv_buffer()
@@ -336,23 +362,49 @@ class StorageManager:
                 log.warning(f"Raw CSV buffer failed: {e}")
 
     def _flush_csv_buffer(self):
-        """Write buffered rows to CSV file (call under csv_lock)."""
+        """Write buffered rows to CSV file (call under csv_lock).
+
+        Every row is guaranteed to have the same columns as the header.
+        """
         if not self._csv_buffer or not self._csv_fieldnames:
             return
         try:
             file_exists = os.path.exists(self.raw_csv_path)
+            need_normalize = False
+
             if file_exists:
-                self._normalize_raw_csv(self._csv_fieldnames)
+                # Check if existing header matches current fieldnames
+                try:
+                    with open(self.raw_csv_path, "r", encoding="utf-8-sig", newline="") as fh:
+                        reader = csv.reader(fh)
+                        existing_header = next(reader, None)
+                        if existing_header and existing_header != self._csv_fieldnames:
+                            need_normalize = True
+                except Exception:
+                    pass
+
+                if need_normalize:
+                    self._normalize_raw_csv(self._csv_fieldnames)
+
             with open(self.raw_csv_path, "a", newline="", encoding="utf-8-sig") as fh:
                 writer = csv.DictWriter(fh, fieldnames=self._csv_fieldnames, extrasaction="ignore")
                 if not file_exists:
                     writer.writeheader()
-                writer.writerows(self._csv_buffer)
+                for row in self._csv_buffer:
+                    # Ensure every row has exactly the right keys
+                    safe_row = {k: row.get(k, "") for k in self._csv_fieldnames}
+                    writer.writerow(safe_row)
             self._csv_buffer.clear()
         except Exception as e:
             log.warning(f"Raw CSV flush failed: {e}")
 
     def _normalize_raw_csv(self, fieldnames: List[str]):
+        """Rewrite the existing raw CSV so every row matches the target fieldnames.
+
+        This handles column additions/removals when the schema evolves. Each
+        existing row is mapped by column name so values end up under the correct
+        header even if the order changed.
+        """
         try:
             with open(self.raw_csv_path, "r", newline="", encoding="utf-8-sig") as fh:
                 rows = list(csv.reader(fh))
@@ -365,27 +417,32 @@ class StorageManager:
         if not rows:
             return
 
-        header = rows[0]
-        if header == fieldnames and all(len(row) == len(fieldnames) for row in rows[1:]):
+        old_header = rows[0]
+        target_len = len(fieldnames)
+
+        # Fast path: headers match and all rows have correct width
+        if old_header == fieldnames and all(len(r) == target_len for r in rows[1:]):
             return
+
+        # Build column name → old index mapping
+        old_col_idx = {name: i for i, name in enumerate(old_header)}
 
         normalized = [fieldnames]
         for row in rows[1:]:
-            if header == fieldnames:
-                normalized.append((row + [""] * len(fieldnames))[:len(fieldnames)])
-                continue
-
-            values = {header[i]: value for i, value in enumerate(row[:len(header)]) if i < len(header)}
-            padded = (row + [""] * len(fieldnames))[:len(fieldnames)]
-            normalized.append([
-                values.get(name, padded[i] if i < len(padded) else "")
-                for i, name in enumerate(fieldnames)
-            ])
+            new_row = []
+            for col_name in fieldnames:
+                if col_name in old_col_idx:
+                    idx = old_col_idx[col_name]
+                    new_row.append(row[idx] if idx < len(row) else "")
+                else:
+                    new_row.append("")
+            normalized.append(new_row)
 
         try:
             with open(self.raw_csv_path, "w", newline="", encoding="utf-8-sig") as fh:
                 writer = csv.writer(fh)
                 writer.writerows(normalized)
+            log.info(f"[raw-csv] Normalized {len(normalized)-1} rows to {target_len} columns")
         except Exception as e:
             log.warning(f"Raw CSV normalize write failed: {e}")
 
